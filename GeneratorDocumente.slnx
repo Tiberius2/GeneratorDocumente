@@ -1,0 +1,10 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="ActAditionalPlugin.csproj" Id="98fb2f7a-18c5-4ba3-ad6f-88979d05dd50">
+    <BuildType Solution="Debug|Any CPU" Project="Release" />
+    <Platform Solution="*|x86" Project="x86" />
+  </Project>
+</Solution>
