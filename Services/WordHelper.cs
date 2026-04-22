@@ -148,18 +148,17 @@ namespace ActAditionalPlugin.Services
             return result.Count > 0 ? result : new List<Run> { MakeRun(replaced, null) };
         }
 
-        // ── Word Interop → PDF ────────────────────────────────
+        // ── Word Interop → PDF (singleton instance) ───────────
+        private static object _wordApp;
+        private static Type _wordType;
+        private static readonly object _wordLock = new object();
+
         internal static void ConvertToPdf(string docxPath, string pdfPath)
         {
-            Type wordType = Type.GetTypeFromProgID("Word.Application");
-            if (wordType == null)
-                throw new InvalidOperationException("Microsoft Word nu este instalat.");
-
-            object wordApp = Activator.CreateInstance(wordType);
-            try
+            lock (_wordLock)
             {
-                wordType.InvokeMember("Visible", BindingFlags.SetProperty, null, wordApp, new object[] { false });
-                object documents = wordType.InvokeMember("Documents", BindingFlags.GetProperty, null, wordApp, null);
+                EnsureWordApp();
+                object documents = _wordType.InvokeMember("Documents", BindingFlags.GetProperty, null, _wordApp, null);
                 object doc = documents.GetType().InvokeMember("Open", BindingFlags.InvokeMethod, null, documents,
                     new object[] { docxPath, false, true });
                 try
@@ -172,10 +171,42 @@ namespace ActAditionalPlugin.Services
                     doc.GetType().InvokeMember("Close", BindingFlags.InvokeMethod, null, doc, new object[] { false });
                 }
             }
-            finally
+        }
+
+        internal static void ShutdownWordApp()
+        {
+            lock (_wordLock)
             {
-                wordType.InvokeMember("Quit", BindingFlags.InvokeMethod, null, wordApp, null);
+                if (_wordApp == null) return;
+                try { _wordType.InvokeMember("Quit", BindingFlags.InvokeMethod, null, _wordApp, null); }
+                catch { }
+                _wordApp = null;
+                _wordType = null;
             }
+        }
+
+        private static void EnsureWordApp()
+        {
+            if (_wordApp != null)
+            {
+                // Verifica daca instanta e inca vie
+                try
+                {
+                    _wordType.InvokeMember("Visible", BindingFlags.GetProperty, null, _wordApp, null);
+                    return; // e vie, o refolosim
+                }
+                catch
+                {
+                    _wordApp = null; // a murit, recreem
+                }
+            }
+
+            _wordType = Type.GetTypeFromProgID("Word.Application");
+            if (_wordType == null)
+                throw new InvalidOperationException("Microsoft Word nu este instalat.");
+
+            _wordApp = Activator.CreateInstance(_wordType);
+            _wordType.InvokeMember("Visible", BindingFlags.SetProperty, null, _wordApp, new object[] { false });
         }
     }
 }

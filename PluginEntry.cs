@@ -31,8 +31,6 @@ namespace ActAditionalPlugin
 
         public override object ExecCommand(int Cmd)
         {
-            if (Cmd == 4000502)
-                return ExecCommandPV();
             if (Cmd != 4000501)
                 return null;
 
@@ -40,6 +38,7 @@ namespace ActAditionalPlugin
             {
                 DocumentFormBase.OnDocumentGenerated = AddDocumentToDatagrid;
 
+                // Single-instance guard
                 if (_activeForm != null && !_activeForm.IsDisposed)
                 {
                     _activeForm.Invoke(new Action(() =>
@@ -67,6 +66,7 @@ namespace ActAditionalPlugin
                 ErpCimData cimData = ErpDataProvider.GetCimData(prsn.PrsnId, XSupport);
                 ErpCompanyData companyData = ErpDataProvider.GetCompanyData(XSupport);
                 string officialName = ReadOfficialName();
+                string adresaPrimitor = ReadAdresaPrimitor(prsn.PrsnId, companyId);
 
                 PdfSharp.Fonts.GlobalFontSettings.UseWindowsFontsUnderWindows = true;
 
@@ -74,30 +74,30 @@ namespace ActAditionalPlugin
                 {
                     try
                     {
-                        TipDocument tipSelectat;
-                        using (var selector = new DocumentSelectorDialog())
+                        DocumentSelection selection;
+                        using (var selector = new SelectorDialog())
                         {
                             _activeForm = selector;
                             if (selector.ShowDialog() != DialogResult.OK) return;
-                            tipSelectat = selector.TipSelectat;
+                            selection = selector.Selection;
                             _activeForm = null;
                         }
 
-                        var modelBase = CreateModel(tipSelectat, prsn, cimData, officialName, companyData);
-
-                        bool reopenSelector = true;
-                        while (reopenSelector)
+                        bool reopen = true;
+                        while (reopen)
                         {
-                            reopenSelector = false;
-                            using (var form = CreateForm(tipSelectat, modelBase))
+                            reopen = false;
+                            using (var form = CreateForm(selection, prsn, cimData, officialName, companyData, adresaPrimitor))
                             {
                                 if (form == null) break;
                                 SetFormIcon(form);
                                 _activeForm = form;
                                 var result = form.ShowDialog();
+                                _activeForm = null;
+
                                 if (result == DialogResult.Cancel)
                                 {
-                                    using (var selector2 = new DocumentSelectorDialog())
+                                    using (var selector2 = new SelectorDialog())
                                     {
                                         _activeForm = selector2;
                                         if (selector2.ShowDialog() != DialogResult.OK)
@@ -105,9 +105,8 @@ namespace ActAditionalPlugin
                                             _activeForm = null;
                                             break;
                                         }
-                                        tipSelectat = selector2.TipSelectat;
-                                        modelBase = CreateModel(tipSelectat, prsn, cimData, officialName, companyData);
-                                        reopenSelector = true;
+                                        selection = selector2.Selection;
+                                        reopen = true;
                                         _activeForm = null;
                                     }
                                 }
@@ -144,109 +143,127 @@ namespace ActAditionalPlugin
             return base.ExecCommand(Cmd);
         }
 
-        // ── Entry point PV ───────────────────────────────────
-        private object ExecCommandPV()
+        // ── Factory unificat ──────────────────────────────────
+        // Creeaza form-ul corect in functie de tipul selectiei (Doc sau PV).
+        private Form CreateForm(DocumentSelection selection, PrsnInfo prsn,
+            ErpCimData cimData, string officialName, ErpCompanyData companyData, string adresaPrimitor)
         {
-            try
+            var docSel = selection as DocSelection;
+            if (docSel != null)
             {
-                if (_activeForm != null && !_activeForm.IsDisposed)
-                {
-                    _activeForm.Invoke(new Action(() =>
-                    {
-                        if (_activeForm.WindowState == FormWindowState.Minimized)
-                            _activeForm.WindowState = FormWindowState.Normal;
-                        _activeForm.Activate();
-                    }));
-                    return base.ExecCommand(4000502);
-                }
-
-                bool createdNew;
-                _mutex = new Mutex(true, MutexName, out createdNew);
-                if (!createdNew)
-                {
-                    _mutex.Dispose();
-                    _mutex = null;
-                    return base.ExecCommand(4000502);
-                }
-
-                int companyId = XSupport.ConnectionInfo.CompanyId;
-                var prsn = TryReadPrsn(companyId);
-                if (prsn == null) return base.ExecCommand(4000502);
-
-                ErpCompanyData companyData = ErpDataProvider.GetCompanyData(XSupport);
-                string adresaPrimitor = ReadAdresaPrimitor(prsn.PrsnId, companyId);
-
-                var thread = new Thread(() =>
-                {
-                    try
-                    {
-                        TipPV tipPV;
-                        using (var selector = new PvSelectorDialog())
-                        {
-                            _activeForm = selector;
-                            if (selector.ShowDialog() != DialogResult.OK) return;
-                            tipPV = selector.TipSelectat;
-                            _activeForm = null;
-                        }
-
-                        bool reopen = true;
-                        while (reopen)
-                        {
-                            reopen = false;
-                            var model = CreatePvModel(tipPV, prsn, companyData, adresaPrimitor);
-                            using (var form = CreatePvForm(tipPV, model, AddPvToDatagrid))
-                            {
-                                if (form == null) break;
-                                SetFormIcon(form);
-                                _activeForm = form;
-                                var result = form.ShowDialog();
-                                _activeForm = null;
-
-                                if (result == DialogResult.Cancel)
-                                {
-                                    using (var selector2 = new PvSelectorDialog())
-                                    {
-                                        _activeForm = selector2;
-                                        if (selector2.ShowDialog() != DialogResult.OK)
-                                        {
-                                            _activeForm = null;
-                                            break;
-                                        }
-                                        tipPV = selector2.TipSelectat;
-                                        reopen = true;
-                                        _activeForm = null;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        MessageBox.Show("Eroare: " + ex.Message, "Generator PV",
-                            MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    }
-                    finally
-                    {
-                        _activeForm = null;
-                        if (_mutex != null)
-                        {
-                            try { _mutex.ReleaseMutex(); } catch { }
-                            _mutex.Dispose();
-                            _mutex = null;
-                        }
-                    }
-                });
-
-                thread.SetApartmentState(ApartmentState.STA);
-                thread.IsBackground = true;
-                thread.Start();
-            }
-            catch (Exception ex)
-            {
-                XSupport.Warning("Generator PV error: " + ex.Message);
+                var model = CreateDocModel(docSel.Tip, prsn, cimData, officialName, companyData);
+                return CreateDocForm(docSel.Tip, model);
             }
 
-            return base.ExecCommand(4000502);
+            var pvSel = selection as PvSelection;
+            if (pvSel != null)
+            {
+                var model = CreatePvModel(pvSel.Tip, prsn, companyData, adresaPrimitor);
+                return CreatePvForm(pvSel.Tip, model, AddPvToDatagrid);
+            }
+
+            return null;
+        }
+
+        // ── Fabrica modele Doc ────────────────────────────────
+        private static DocumentModelBase CreateDocModel(TipDocument tip, PrsnInfo prsn,
+            ErpCimData cimData, string officialName, ErpCompanyData companyData)
+        {
+            DocumentModelBase m;
+            switch (tip)
+            {
+                case TipDocument.ActAditional: m = new ActAditionalModel(); break;
+                case TipDocument.SuspendareCresterecopil: m = new SuspendareCresterecopilModel(); break;
+                case TipDocument.SuspendareCresterecopilHandicap: m = new SuspendareCresterecopilHandicapModel(); break;
+                case TipDocument.SuspendareAbsenteNemotivate: m = new SuspendareAbsenteNemotivateModel(); break;
+                case TipDocument.SuspendareAcordParti: m = new SuspendareAcordPartiModel(); break;
+                case TipDocument.SuspendareSiIncetareSuspendare: m = new SuspendareSiIncetareSuspendareModel(); break;
+                case TipDocument.IncetareSuspendare: m = new IncetareSuspendareModel(); break;
+                case TipDocument.IncetareDemisie: m = new IncetareDemisieModel(); break;
+                case TipDocument.IncetareExpirare: m = new IncetareExpirareModel(); break;
+                case TipDocument.IncetareDisciplinar: m = new IncetareDisciplinarModel(); break;
+                default: m = new ActAditionalModel(); break;
+            }
+
+            m.PrsnId = prsn.PrsnId;
+            m.NumeSalariat = prsn.NumeSalariat;
+            m.CNP = prsn.CNP;
+            m.Functie = prsn.Functie;
+            m.NrCim = cimData.NrCim;
+            m.DataCim = cimData.DataCim;
+            ApplyCompanyData(m, companyData);
+
+            var absente = m as SuspendareAbsenteNemotivateModel;
+            if (absente != null && string.IsNullOrWhiteSpace(absente.IntocmitDe))
+                absente.IntocmitDe = officialName;
+
+            var disciplinar = m as IncetareDisciplinarModel;
+            if (disciplinar != null && string.IsNullOrWhiteSpace(disciplinar.NumeIntocmit))
+                disciplinar.NumeIntocmit = officialName;
+
+            return m;
+        }
+
+        // ── Fabrica formulare Doc ─────────────────────────────
+        private static Form CreateDocForm(TipDocument tip, DocumentModelBase model)
+        {
+            switch (tip)
+            {
+                case TipDocument.ActAditional: return new ActAditionalForm((ActAditionalModel)model);
+                case TipDocument.SuspendareCresterecopil: return new SuspendareCresterecopilForm((SuspendareCresterecopilModel)model);
+                case TipDocument.SuspendareCresterecopilHandicap: return new SuspendareCresterecopilHandicapForm((SuspendareCresterecopilHandicapModel)model);
+                case TipDocument.SuspendareAbsenteNemotivate: return new SuspendareAbsenteForm((SuspendareAbsenteNemotivateModel)model);
+                case TipDocument.SuspendareAcordParti: return new SuspendareAcordPartiForm((SuspendareAcordPartiModel)model);
+                case TipDocument.SuspendareSiIncetareSuspendare: return new SuspendareSiIncetareSuspendareForm((SuspendareSiIncetareSuspendareModel)model);
+                case TipDocument.IncetareSuspendare: return new IncetareSuspendareForm((IncetareSuspendareModel)model);
+                case TipDocument.IncetareDemisie: return new IncetareDemisieForm((IncetareDemisieModel)model);
+                case TipDocument.IncetareExpirare: return new IncetareExpirareForm((IncetareExpirareModel)model);
+                case TipDocument.IncetareDisciplinar: return new IncetareDisciplinarForm((IncetareDisciplinarModel)model);
+                default: return null;
+            }
+        }
+
+        // ── Fabrica modele PV ─────────────────────────────────
+        private static PvModelBase CreatePvModel(TipPV tip, PrsnInfo prsn,
+            ErpCompanyData companyData, string adresaPrimitor)
+        {
+            PvModelBase m;
+            switch (tip)
+            {
+                case TipPV.Electronice: m = new PvElecroniceModel(); break;
+                case TipPV.Autovehicul: m = new PvAutovehiculModel(); break;
+                default: m = new PvEchipamenteModel(); break;
+            }
+
+            m.PrsnId = prsn.PrsnId;
+            m.NumeSalariat = prsn.NumeSalariat;
+            m.CNP = prsn.CNP;
+            m.Functie = prsn.Functie;
+            ApplyCompanyData(m, companyData);
+
+            var auto = m as PvAutovehiculModel;
+            if (auto != null && !string.IsNullOrWhiteSpace(adresaPrimitor))
+                auto.Domiciliu = adresaPrimitor;
+
+            return m;
+        }
+
+        // ── Fabrica formulare PV ──────────────────────────────
+        private static Form CreatePvForm(TipPV tip, PvModelBase model, Action<PvModelBase> onPdfGenerated)
+        {
+            switch (tip)
+            {
+                case TipPV.Echipamente:
+                    return new PvBunuriForm((PvEchipamenteModel)model,
+                        "Proces Verbal — Echipamente de lucru / Uniformă", "BUNURI PREDATE", onPdfGenerated);
+                case TipPV.Electronice:
+                    return new PvBunuriForm((PvElecroniceModel)model,
+                        "Proces Verbal — Echipamente Electronice", "ECHIPAMENTE PREDATE", onPdfGenerated);
+                case TipPV.Autovehicul:
+                    return new PvAutovehiculForm((PvAutovehiculModel)model, onPdfGenerated);
+                default:
+                    return null;
+            }
         }
 
         // ── Helpers citire date ERP ───────────────────────────
@@ -318,111 +335,37 @@ namespace ActAditionalPlugin
             catch { }
         }
 
-        // ── Fabrica modele ────────────────────────────────────
-        private static DocumentModelBase CreateModel(TipDocument tip, PrsnInfo prsn,
-            ErpCimData cimData, string officialName, ErpCompanyData companyData)
-        {
-            DocumentModelBase m;
-            switch (tip)
-            {
-                case TipDocument.ActAditional:                  m = new ActAditionalModel(); break;
-                case TipDocument.SuspendareCresterecopil:       m = new SuspendareCresterecopilModel(); break;
-                case TipDocument.SuspendareCresterecopilHandicap: m = new SuspendareCresterecopilHandicapModel(); break;
-                case TipDocument.SuspendareAbsenteNemotivate:   m = new SuspendareAbsenteNemotivateModel(); break;
-                case TipDocument.SuspendareAcordParti:          m = new SuspendareAcordPartiModel(); break;
-                case TipDocument.SuspendareSiIncetareSuspendare: m = new SuspendareSiIncetareSuspendareModel(); break;
-                case TipDocument.IncetareSuspendare:            m = new IncetareSuspendareModel(); break;
-                case TipDocument.IncetareDemisie:               m = new IncetareDemisieModel(); break;
-                case TipDocument.IncetareExpirare:              m = new IncetareExpirareModel(); break;
-                case TipDocument.IncetareDisciplinar:           m = new IncetareDisciplinarModel(); break;
-                default:                                        m = new ActAditionalModel(); break;
-            }
-
-            m.PrsnId = prsn.PrsnId;
-            m.NumeSalariat = prsn.NumeSalariat;
-            m.CNP = prsn.CNP;
-            m.Functie = prsn.Functie;
-            m.NrCim = cimData.NrCim;
-            m.DataCim = cimData.DataCim;
-            ApplyCompanyData(m, companyData);
-
-            var absente = m as SuspendareAbsenteNemotivateModel;
-            if (absente != null && string.IsNullOrWhiteSpace(absente.IntocmitDe))
-                absente.IntocmitDe = officialName;
-
-            var disciplinar = m as IncetareDisciplinarModel;
-            if (disciplinar != null && string.IsNullOrWhiteSpace(disciplinar.NumeIntocmit))
-                disciplinar.NumeIntocmit = officialName;
-
-            return m;
-        }
-
-        // ── Fabrica modele PV ─────────────────────────────────
-        private static PvModelBase CreatePvModel(TipPV tip, PrsnInfo prsn,
-            ErpCompanyData companyData, string adresaPrimitor)
-        {
-            PvModelBase m;
-            switch (tip)
-            {
-                case TipPV.Electronice: m = new PvElecroniceModel(); break;
-                case TipPV.Autovehicul: m = new PvAutovehiculModel(); break;
-                default:                m = new PvEchipamenteModel(); break;
-            }
-
-            m.PrsnId = prsn.PrsnId;
-            m.NumeSalariat = prsn.NumeSalariat;
-            m.CNP = prsn.CNP;
-            m.Functie = prsn.Functie;
-            ApplyCompanyData(m, companyData);
-
-            var auto = m as PvAutovehiculModel;
-            if (auto != null && !string.IsNullOrWhiteSpace(adresaPrimitor))
-                auto.Domiciliu = adresaPrimitor;
-
-            return m;
-        }
-
+        // ── ApplyCompanyData (overload Doc + PV) ─────────────
         private static void ApplyCompanyData(DocumentModelBase m, ErpCompanyData data)
         {
             bool useErp = data != null && !string.IsNullOrWhiteSpace(data.NumeAngajator);
-            m.NumeAngajator      = useErp ? data.NumeAngajator      : PluginConfig.NumeAngajator;
-            m.CIFAngajator       = useErp ? data.CIFAngajator       : PluginConfig.CIFAngajator;
-            m.ReprezentantLegal  = useErp ? data.ReprezentantLegal  : PluginConfig.ReprezentantLegal;
+            m.NumeAngajator = useErp ? data.NumeAngajator : PluginConfig.NumeAngajator;
+            m.CIFAngajator = useErp ? data.CIFAngajator : PluginConfig.CIFAngajator;
+            m.ReprezentantLegal = useErp ? data.ReprezentantLegal : PluginConfig.ReprezentantLegal;
             m.FunctieReprezentant = useErp ? data.FunctieReprezentant : PluginConfig.FunctieReprezentant;
-            m.AdresaCompanie     = useErp ? data.AdresaCompanie     : PluginConfig.AdresaCompanie;
-            m.ZipCompanie        = useErp ? data.ZipCompanie        : PluginConfig.ZipCompanie;
-            m.NrRegComertului    = useErp ? data.NrRegComertului    : PluginConfig.NrRegComertului;
-            m.IbanCompanie       = useErp ? data.IbanCompanie       : PluginConfig.IbanCompanie;
-            m.NrTelefonCompanie  = useErp ? data.NrTelefonCompanie  : PluginConfig.NrTelefonCompanie;
-            m.EmailCompanie      = useErp ? data.EmailCompanie      : PluginConfig.EmailCompanie;
-            m.WebsiteCompanie    = useErp ? data.WebsiteCompanie    : PluginConfig.WebsiteCompanie;
+            m.AdresaCompanie = useErp ? data.AdresaCompanie : PluginConfig.AdresaCompanie;
+            m.ZipCompanie = useErp ? data.ZipCompanie : PluginConfig.ZipCompanie;
+            m.NrRegComertului = useErp ? data.NrRegComertului : PluginConfig.NrRegComertului;
+            m.IbanCompanie = useErp ? data.IbanCompanie : PluginConfig.IbanCompanie;
+            m.NrTelefonCompanie = useErp ? data.NrTelefonCompanie : PluginConfig.NrTelefonCompanie;
+            m.EmailCompanie = useErp ? data.EmailCompanie : PluginConfig.EmailCompanie;
+            m.WebsiteCompanie = useErp ? data.WebsiteCompanie : PluginConfig.WebsiteCompanie;
         }
 
         private static void ApplyCompanyData(PvModelBase m, ErpCompanyData data)
         {
             bool useErp = data != null && !string.IsNullOrWhiteSpace(data.NumeAngajator);
-            m.NumeAngajator      = useErp ? data.NumeAngajator      : PluginConfig.NumeAngajator;
-            m.CIFAngajator       = useErp ? data.CIFAngajator       : PluginConfig.CIFAngajator;
-            m.ReprezentantLegal  = useErp ? data.ReprezentantLegal  : PluginConfig.ReprezentantLegal;
+            m.NumeAngajator = useErp ? data.NumeAngajator : PluginConfig.NumeAngajator;
+            m.CIFAngajator = useErp ? data.CIFAngajator : PluginConfig.CIFAngajator;
+            m.ReprezentantLegal = useErp ? data.ReprezentantLegal : PluginConfig.ReprezentantLegal;
             m.FunctieReprezentant = useErp ? data.FunctieReprezentant : PluginConfig.FunctieReprezentant;
-            m.AdresaCompanie     = useErp ? data.AdresaCompanie     : PluginConfig.AdresaCompanie;
-            m.ZipCompanie        = useErp ? data.ZipCompanie        : PluginConfig.ZipCompanie;
-            m.NrRegComertului    = useErp ? data.NrRegComertului    : PluginConfig.NrRegComertului;
-            m.IbanCompanie       = useErp ? data.IbanCompanie       : PluginConfig.IbanCompanie;
-            m.NrTelefonCompanie  = useErp ? data.NrTelefonCompanie  : PluginConfig.NrTelefonCompanie;
-            m.EmailCompanie      = useErp ? data.EmailCompanie      : PluginConfig.EmailCompanie;
-            m.WebsiteCompanie    = useErp ? data.WebsiteCompanie    : PluginConfig.WebsiteCompanie;
-        }
-
-        private static Form CreatePvForm(TipPV tip, PvModelBase model, Action<PvModelBase> onPdfGenerated)
-        {
-            switch (tip)
-            {
-                case TipPV.Echipamente: return new PvEchipamenteForm((PvEchipamenteModel)model, onPdfGenerated);
-                case TipPV.Electronice: return new PvElectroniceForm((PvElecroniceModel)model, onPdfGenerated);
-                case TipPV.Autovehicul: return new PvAutovehiculForm((PvAutovehiculModel)model, onPdfGenerated);
-                default: return null;
-            }
+            m.AdresaCompanie = useErp ? data.AdresaCompanie : PluginConfig.AdresaCompanie;
+            m.ZipCompanie = useErp ? data.ZipCompanie : PluginConfig.ZipCompanie;
+            m.NrRegComertului = useErp ? data.NrRegComertului : PluginConfig.NrRegComertului;
+            m.IbanCompanie = useErp ? data.IbanCompanie : PluginConfig.IbanCompanie;
+            m.NrTelefonCompanie = useErp ? data.NrTelefonCompanie : PluginConfig.NrTelefonCompanie;
+            m.EmailCompanie = useErp ? data.EmailCompanie : PluginConfig.EmailCompanie;
+            m.WebsiteCompanie = useErp ? data.WebsiteCompanie : PluginConfig.WebsiteCompanie;
         }
 
         // ── Inserare datagrid ─────────────────────────────────
@@ -432,16 +375,24 @@ namespace ActAditionalPlugin
             try
             {
                 var pvTable = XModule.GetTable("CCCPVEMISE");
+                int companyId = XSupport.ConnectionInfo.CompanyId;
                 if (pvTable == null || pvTable.Current == null) return;
-
                 pvTable.Current.Append();
-                pvTable.Current["PRSN"]        = model.PrsnId;
-                pvTable.Current["CCCTRNDATE"]  = DateTime.Now;
-                pvTable.Current["CCCPVTYPE"]   = GetPvTypeCode(model.TipPV);
-                pvTable.Current["CCCPVNAME"]   = GetPvObservatii(model);
+                //SafeSetField(pvTable, "COMPANY", companyId);
+                //SafeSetField(pvTable, "PRSN", model.PrsnId);
+                //SafeSetField(pvTable, "CCCTRNDATE", DateTime.Now);
+                //SafeSetField(pvTable, "CODINREGISTRARE", model.CodInregistrare);
+                //SafeSetField(pvTable, "CCCPVTYPE", GetPvTypeCode(model.TipPV));
+                //SafeSetField(pvTable, "CCCPVNAME", GetPvObservatii(model));
+                //SafeSetField(pvTable, "CCCPVNUMBER", GetPvNumber(model.CodInregistrare));
+                pvTable.Current["PRSN"] = model.PrsnId;
+                pvTable.Current["CCCTRNDATE"] = DateTime.Now;
+                pvTable.Current["CODINREGISTRARE"] = model.CodInregistrare;
+                pvTable.Current["CCCPVTYPE"] = GetPvTypeCode(model.TipPV);
+                pvTable.Current["CCCPVNAME"] = GetPvObservatii(model);
                 pvTable.Current["CCCPVNUMBER"] = GetPvNumber(model.CodInregistrare);
                 pvTable.Current.Post();
-                this.XModule.Exec("Button:Save");
+               // this.XModule.Exec("Button:Save");
             }
             catch (Exception ex)
             {
@@ -474,17 +425,17 @@ namespace ActAditionalPlugin
 
                 int companyId = XSupport.ConnectionInfo.CompanyId;
                 tbl.Current.Append();
-                SafeSetField(tbl, "COMPANY",          companyId);
-                SafeSetField(tbl, "PRSN",             model.PrsnId);
-                SafeSetField(tbl, "CCCCODINREG",      model.CodInregistrare);
-                SafeSetField(tbl, "CCCNRINREG",       GetPvNumber(model.CodInregistrare));
-                SafeSetField(tbl, "CCCIDCONTRACT",    ParseInt(model.NrCim));
-                SafeSetField(tbl, "CCCDATAINREG",     GetSoftoneLoginDate());
+                SafeSetField(tbl, "COMPANY", companyId);
+                SafeSetField(tbl, "PRSN", model.PrsnId);
+                SafeSetField(tbl, "CCCCODINREG", model.CodInregistrare);
+                SafeSetField(tbl, "CCCNRINREG", GetPvNumber(model.CodInregistrare));
+                SafeSetField(tbl, "CCCIDCONTRACT", ParseInt(model.NrCim));
+                SafeSetField(tbl, "CCCDATAINREG", GetSoftoneLoginDate());
                 if (model.DataVigoare != DateTime.MinValue)
                     SafeSetField(tbl, "CCCDATAVIGOARE", model.DataVigoare);
                 SafeSetField(tbl, "CCCDOCUMENTSTATUS", 1);
                 tbl.Current.Post();
-                this.XModule.Exec("Button:Save");
+                //this.XModule.Exec("Button:Save");
             }
             catch (Exception ex)
             {
@@ -501,19 +452,19 @@ namespace ActAditionalPlugin
 
                 int companyId = XSupport.ConnectionInfo.CompanyId;
                 tbl.Current.Append();
-                SafeSetField(tbl, "COMPANY",     companyId);
-                SafeSetField(tbl, "PRSN",        model.PrsnId);
+                SafeSetField(tbl, "COMPANY", companyId);
+                SafeSetField(tbl, "PRSN", model.PrsnId);
                 SafeSetField(tbl, "CCCCODINREG", model.CodInregistrare);
-                SafeSetField(tbl, "CCCNRINREG",  GetPvNumber(model.CodInregistrare));
+                SafeSetField(tbl, "CCCNRINREG", GetPvNumber(model.CodInregistrare));
                 SafeSetField(tbl, "CCCIDCONTRACT", ParseInt(model.NrCim));
-                SafeSetField(tbl, "CCCDATAINREG",  GetSoftoneLoginDate());
+                SafeSetField(tbl, "CCCDATAINREG", GetSoftoneLoginDate());
                 if (model.DataDecizie != DateTime.MinValue)
                     SafeSetField(tbl, "CCCDATAVIGOARE", model.DataDecizie);
-                SafeSetField(tbl, "LINENUM",   1);
+                SafeSetField(tbl, "LINENUM", 1);
                 SafeSetField(tbl, "CCCSTATUS", 1);
                 SafeSetField(tbl, "CCCTIPDCZ", GetDecizieTipText(model.TipDocument));
                 tbl.Current.Post();
-                this.XModule.Exec("Button:Save");
+                //this.XModule.Exec("Button:Save");
             }
             catch (Exception ex)
             {
@@ -524,11 +475,7 @@ namespace ActAditionalPlugin
         // ── Utilitare ─────────────────────────────────────────
         private static void SafeSetField(dynamic table, string fieldName, object value)
         {
-            try
-            {
-                if (value == null) return;
-                table.Current[fieldName] = value;
-            }
+            try { if (value != null) table.Current[fieldName] = value; }
             catch { }
         }
 
@@ -595,35 +542,16 @@ namespace ActAditionalPlugin
         {
             switch (tip)
             {
-                case TipDocument.SuspendareCresterecopil:      return "Crestere copil";
+                case TipDocument.SuspendareCresterecopil: return "Crestere copil";
                 case TipDocument.SuspendareCresterecopilHandicap: return "Crestere copil handicap";
-                case TipDocument.SuspendareAbsenteNemotivate:  return "Absente nemotivate";
-                case TipDocument.SuspendareAcordParti:         return "Acordul partilor";
+                case TipDocument.SuspendareAbsenteNemotivate: return "Absente nemotivate";
+                case TipDocument.SuspendareAcordParti: return "Acordul partilor";
                 case TipDocument.SuspendareSiIncetareSuspendare: return "Suspendare + Incetare";
-                case TipDocument.IncetareSuspendare:           return "Incetare suspendare";
-                case TipDocument.IncetareDemisie:              return "Incetare demisie";
-                case TipDocument.IncetareExpirare:             return "Expirare termen";
-                case TipDocument.IncetareDisciplinar:          return "Concediere disciplinara";
+                case TipDocument.IncetareSuspendare: return "Incetare suspendare";
+                case TipDocument.IncetareDemisie: return "Incetare demisie";
+                case TipDocument.IncetareExpirare: return "Expirare termen";
+                case TipDocument.IncetareDisciplinar: return "Concediere disciplinara";
                 default: return tip.ToString();
-            }
-        }
-
-        // ── Fabrica formulare ─────────────────────────────────
-        private static Form CreateForm(TipDocument tip, DocumentModelBase model)
-        {
-            switch (tip)
-            {
-                case TipDocument.ActAditional:                  return new ActAditionalForm((ActAditionalModel)model);
-                case TipDocument.SuspendareCresterecopil:       return new SuspendareCresterecopilForm((SuspendareCresterecopilModel)model);
-                case TipDocument.SuspendareCresterecopilHandicap: return new SuspendareCresterecopilHandicapForm((SuspendareCresterecopilHandicapModel)model);
-                case TipDocument.SuspendareAbsenteNemotivate:   return new SuspendareAbsenteForm((SuspendareAbsenteNemotivateModel)model);
-                case TipDocument.SuspendareAcordParti:          return new SuspendareAcordPartiForm((SuspendareAcordPartiModel)model);
-                case TipDocument.SuspendareSiIncetareSuspendare: return new SuspendareSiIncetareSuspendareForm((SuspendareSiIncetareSuspendareModel)model);
-                case TipDocument.IncetareSuspendare:            return new IncetareSuspendareForm((IncetareSuspendareModel)model);
-                case TipDocument.IncetareDemisie:               return new IncetareDemisieForm((IncetareDemisieModel)model);
-                case TipDocument.IncetareExpirare:              return new IncetareExpirareForm((IncetareExpirareModel)model);
-                case TipDocument.IncetareDisciplinar:           return new IncetareDisciplinarForm((IncetareDisciplinarModel)model);
-                default: return null;
             }
         }
     }

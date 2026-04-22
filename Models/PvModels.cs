@@ -21,6 +21,20 @@ namespace ActAditionalPlugin.Models
         CasareScoatere = 7
     }
 
+    /// <summary>
+    /// Interfata comuna pentru modelele PV cu lista de bunuri (Echipamente + Electronice).
+    /// Permite PvBunuriForm sa fie generica fara casting.
+    /// </summary>
+    public interface IPvBunuriModel
+    {
+        string CodInregistrare { get; set; }
+        DateTime DataPV { get; set; }
+        TipPredare TipPredare { get; set; }
+        string Mentiuni { get; set; }
+        System.Collections.Generic.List<PvBunItem> Bunuri { get; set; }
+        string GetTemplatePath();
+    }
+
     public abstract class PvModelBase
     {
         public abstract TipPV TipPV { get; }
@@ -86,7 +100,7 @@ namespace ActAditionalPlugin.Models
     }
 
     // ══════════════════════════════════════════════════════════
-    //  PV ECHIPAMENTE / ELECTRONICE
+    //  PV ECHIPAMENTE / ELECTRONICE — implementeaza IPvBunuriModel
     // ══════════════════════════════════════════════════════════
     public class PvBunItem
     {
@@ -97,7 +111,7 @@ namespace ActAditionalPlugin.Models
         public PvBunItem() { Nume = string.Empty; Cantitate = "1"; Pret = string.Empty; }
     }
 
-    public class PvEchipamenteModel : PvModelBase
+    public class PvEchipamenteModel : PvModelBase, IPvBunuriModel
     {
         public override TipPV TipPV { get { return TipPV.Echipamente; } }
         public System.Collections.Generic.List<PvBunItem> Bunuri { get; set; }
@@ -108,9 +122,11 @@ namespace ActAditionalPlugin.Models
             Bunuri = new System.Collections.Generic.List<PvBunItem>();
             Mentiuni = string.Empty;
         }
+
+        public string GetTemplatePath() => PluginConfig.GetTemplatePath(TipPV.Echipamente);
     }
 
-    public class PvElecroniceModel : PvModelBase
+    public class PvElecroniceModel : PvModelBase, IPvBunuriModel
     {
         public override TipPV TipPV { get { return TipPV.Electronice; } }
         public System.Collections.Generic.List<PvBunItem> Bunuri { get; set; }
@@ -121,6 +137,8 @@ namespace ActAditionalPlugin.Models
             Bunuri = new System.Collections.Generic.List<PvBunItem>();
             Mentiuni = string.Empty;
         }
+
+        public string GetTemplatePath() => PluginConfig.GetTemplatePath(TipPV.Electronice);
     }
 
     // ══════════════════════════════════════════════════════════
@@ -130,7 +148,7 @@ namespace ActAditionalPlugin.Models
     {
         public override TipPV TipPV { get { return TipPV.Autovehicul; } }
 
-        // ── Al doilea predator (Art. 2) — detalii complete ───
+        // ── Al doilea predator (Art. 2) ───────────────────────
         public string NumePredator2 { get; set; }
         public string FunctiePredator2 { get; set; }
         public string CNPPredator2 { get; set; }
@@ -163,7 +181,7 @@ namespace ActAditionalPlugin.Models
         public string CheieRoti { get; set; }
         public string VestaReflectorizanta { get; set; }
         public string RoataRezervа { get; set; }
-        public string UzuraRoataRezervа { get; set; }  // % uzura roata rezerva
+        public string UzuraRoataRezervа { get; set; }
 
         // ── Documente vehicul ────────────────────────────────
         public string CertificatInmatriculare { get; set; }

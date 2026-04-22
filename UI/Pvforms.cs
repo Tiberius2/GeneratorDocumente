@@ -1,5 +1,4 @@
-﻿using ActAditionalPlugin;
-using ActAditionalPlugin.Models;
+﻿using ActAditionalPlugin.Models;
 using ActAditionalPlugin.UI;
 using System;
 using System.Drawing;
@@ -8,11 +7,15 @@ using System.Windows.Forms;
 namespace ActAditionalPlugin.UI
 {
     // ══════════════════════════════════════════════════════════
-    //  PV ECHIPAMENTE
+    //  PV BUNURI — unifica Echipamente + Electronice
+    //  Diferenta intre cele doua: titlul formularului, label-ul
+    //  sectiunii de bunuri si GetTemplatePath(). Restul identic.
     // ══════════════════════════════════════════════════════════
-    public class PvEchipamenteForm : PvFormBase
+    public class PvBunuriForm : PvFormBase
     {
-        private readonly PvEchipamenteModel _m;
+        private readonly IPvBunuriModel _m;
+        private readonly string _sectionLabel;
+
         private TextBox _txtCod;
         private DateTimePicker _dtpData;
         private ComboBox _cmbTipPredare;
@@ -21,8 +24,14 @@ namespace ActAditionalPlugin.UI
         private readonly System.Collections.Generic.List<EchipamentItemControl> _items
             = new System.Collections.Generic.List<EchipamentItemControl>();
 
-        public PvEchipamenteForm(PvEchipamenteModel model, Action<PvModelBase> onPdfGenerated = null)
-            : base(model, "Proces Verbal — Echipamente de lucru / Uniformă", onPdfGenerated) { _m = model; Build(); }
+        public PvBunuriForm(IPvBunuriModel model, string titluForm, string sectionLabel,
+                            Action<PvModelBase> onPdfGenerated = null)
+            : base((PvModelBase)model, titluForm, onPdfGenerated)
+        {
+            _m = model;
+            _sectionLabel = sectionLabel;
+            Build();
+        }
 
         private void Build()
         {
@@ -37,6 +46,7 @@ namespace ActAditionalPlugin.UI
             AddLabeledInput(tbl1, 1, "Data PV", _dtpData);
             AddLabeledInput(tbl1, 2, "Tip predare-primire", _cmbTipPredare);
 
+            // Header sectiune bunuri cu buton adaugare
             var pnlHeader = new Panel
             {
                 Left = 0,
@@ -48,14 +58,16 @@ namespace ActAditionalPlugin.UI
             pnlHeader.Width = Math.Max(PnlBody.ClientSize.Width - PnlBody.Padding.Horizontal, 400);
             PnlBody.Controls.Add(pnlHeader);
             PnlBody.Resize += (s, e) => pnlHeader.Width = PnlBody.ClientSize.Width - PnlBody.Padding.Horizontal;
+
             pnlHeader.Controls.Add(new Label
             {
-                Text = "BUNURI PREDATE",
+                Text = _sectionLabel,
                 Font = FSectiune,
                 ForeColor = Albastru,
                 AutoSize = true,
                 Location = new Point(0, 8)
             });
+
             var btnAdd = new Button
             {
                 Text = "+ Adaugă echipament",
@@ -95,165 +107,16 @@ namespace ActAditionalPlugin.UI
             y += 268;
 
             var pnlMent = AddSectiune("MENȚIUNI", ref y, 90);
-            var lblMent = new Label
+            pnlMent.Controls.Add(new Label
             {
                 Text = "Mențiuni suplimentare (opțional):",
                 Font = new Font("Segoe UI", 8.5f),
                 ForeColor = TextSecundar,
                 AutoSize = true,
                 Margin = new Padding(0, 4, 0, 2)
-            };
-            _txtMentiuni = MakeMultiline(52);
-            _txtMentiuni.Dock = DockStyle.Top;
-            pnlMent.Controls.Add(lblMent);
-            pnlMent.Controls.Add(_txtMentiuni);
-            pnlMent.Resize += (s, e) => _txtMentiuni.Width = pnlMent.ClientSize.Width - pnlMent.Padding.Horizontal;
-        }
-
-        private void AddItem()
-        {
-            var ctrl = new EchipamentItemControl(_items.Count + 1);
-            ctrl.Width = Math.Max(_pnlItems.Width - 2, 400);
-            ctrl.OnDelete = () => { _items.Remove(ctrl); _pnlItems.Controls.Remove(ctrl); Renumber(); RelayoutItems(); };
-            _items.Add(ctrl);
-            _pnlItems.Controls.Add(ctrl);
-            RelayoutItems();
-        }
-
-        private void Renumber() { for (int i = 0; i < _items.Count; i++) _items[i].Numar = i + 1; }
-
-        private void RelayoutItems()
-        {
-            int w = Math.Max(_pnlItems.ClientSize.Width - 2, 400);
-            int y = 0;
-            foreach (var c in _items) { c.Width = w; c.Left = 0; c.Top = y; y += c.Height + 6; }
-        }
-
-        protected override bool ValidateForm()
-        {
-            if (!RequireText(_txtCod, "Cod înregistrare")) return false;
-            if (!ValidateCodInregistrare(_txtCod)) return false;
-            if (_items.Count == 0)
-            { MessageBox.Show("Adăugați cel puțin un echipament.", "Validare", MessageBoxButtons.OK, MessageBoxIcon.Warning); return false; }
-            for (int i = 0; i < _items.Count; i++)
-                if (!_items[i].IsValid())
-                { MessageBox.Show(string.Format("Echipamentul {0} nu are denumire completată.", i + 1), "Validare", MessageBoxButtons.OK, MessageBoxIcon.Warning); return false; }
-            return true;
-        }
-
-        protected override void PopulateModel()
-        {
-            FillAngajatorFields(_m);
-            _m.CodInregistrare = GetText(_txtCod);
-            _m.DataPV = GetDate(_dtpData);
-            _m.TipPredare = GetTipPredare(_cmbTipPredare);
-            _m.Mentiuni = _txtMentiuni.Text.Trim();
-            _m.Bunuri = new System.Collections.Generic.List<ActAditionalPlugin.Models.PvBunItem>();
-            foreach (var item in _items) { var bun = item.GetBunItem(); if (bun != null) _m.Bunuri.Add(bun); }
-        }
-
-        protected override string GetTemplatePath() => PluginConfig.GetTemplatePath(TipPV.Echipamente);
-    }
-
-    // ══════════════════════════════════════════════════════════
-    //  PV ELECTRONICE
-    // ══════════════════════════════════════════════════════════
-    public class PvElectroniceForm : PvFormBase
-    {
-        private readonly PvElecroniceModel _m;
-        private TextBox _txtCod;
-        private DateTimePicker _dtpData;
-        private ComboBox _cmbTipPredare;
-        private TextBox _txtMentiuni;
-        private Panel _pnlItems;
-        private readonly System.Collections.Generic.List<EchipamentItemControl> _items
-            = new System.Collections.Generic.List<EchipamentItemControl>();
-
-        public PvElectroniceForm(PvElecroniceModel model, Action<PvModelBase> onPdfGenerated = null)
-            : base(model, "Proces Verbal — Echipamente Electronice", onPdfGenerated) { _m = model; Build(); }
-
-        private void Build()
-        {
-            int y = 0;
-
-            var pnlDoc = AddSectiune("DATE DOCUMENT", ref y, 66);
-            _txtCod = MakeInput("ex. 26001/1");
-            _dtpData = MakeDtp();
-            _cmbTipPredare = MakeTipPredareCombo();
-            var tbl1 = AddRow(pnlDoc, new[] { 30, 30, 40 });
-            AddLabeledInput(tbl1, 0, "Cod înregistrare", _txtCod, required: true);
-            AddLabeledInput(tbl1, 1, "Data PV", _dtpData);
-            AddLabeledInput(tbl1, 2, "Tip predare-primire", _cmbTipPredare);
-
-            var pnlHeader = new Panel
-            {
-                Left = 0,
-                Top = y,
-                Height = 34,
-                BackColor = Color.Transparent,
-                Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top
-            };
-            pnlHeader.Width = Math.Max(PnlBody.ClientSize.Width - PnlBody.Padding.Horizontal, 400);
-            PnlBody.Controls.Add(pnlHeader);
-            PnlBody.Resize += (s, e) => pnlHeader.Width = PnlBody.ClientSize.Width - PnlBody.Padding.Horizontal;
-            pnlHeader.Controls.Add(new Label
-            {
-                Text = "ECHIPAMENTE PREDATE",
-                Font = FSectiune,
-                ForeColor = Albastru,
-                AutoSize = true,
-                Location = new Point(0, 8)
             });
-            var btnAdd = new Button
-            {
-                Text = "+ Adaugă echipament",
-                Height = 28,
-                Width = 190,
-                FlatStyle = FlatStyle.Flat,
-                BackColor = Albastru,
-                ForeColor = Color.White,
-                Font = new Font("Segoe UI", 9f, FontStyle.Bold),
-                Cursor = Cursors.Hand,
-                Top = 3,
-                Anchor = AnchorStyles.Right | AnchorStyles.Top
-            };
-            btnAdd.FlatAppearance.BorderSize = 0;
-            btnAdd.Click += (s, e) => AddItem();
-            pnlHeader.Controls.Add(btnAdd);
-            pnlHeader.Resize += (s, e) => btnAdd.Left = pnlHeader.Width - btnAdd.Width;
-            btnAdd.Left = pnlHeader.Width - btnAdd.Width;
-            y += 42;
-
-            _pnlItems = new Panel
-            {
-                Left = 0,
-                Top = y,
-                Height = 260,
-                BackColor = Color.FromArgb(242, 245, 250),
-                AutoScroll = true,
-                Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top
-            };
-            _pnlItems.Width = Math.Max(PnlBody.ClientSize.Width - PnlBody.Padding.Horizontal, 400);
-            PnlBody.Controls.Add(_pnlItems);
-            PnlBody.Resize += (s, e) =>
-            {
-                _pnlItems.Width = PnlBody.ClientSize.Width - PnlBody.Padding.Horizontal;
-                RelayoutItems();
-            };
-            y += 268;
-
-            var pnlMent = AddSectiune("MENȚIUNI", ref y, 90);
-            var lblMent = new Label
-            {
-                Text = "Mențiuni suplimentare (opțional):",
-                Font = new Font("Segoe UI", 8.5f),
-                ForeColor = TextSecundar,
-                AutoSize = true,
-                Margin = new Padding(0, 4, 0, 2)
-            };
             _txtMentiuni = MakeMultiline(52);
             _txtMentiuni.Dock = DockStyle.Top;
-            pnlMent.Controls.Add(lblMent);
             pnlMent.Controls.Add(_txtMentiuni);
             pnlMent.Resize += (s, e) => _txtMentiuni.Width = pnlMent.ClientSize.Width - pnlMent.Padding.Horizontal;
         }
@@ -291,7 +154,7 @@ namespace ActAditionalPlugin.UI
 
         protected override void PopulateModel()
         {
-            FillAngajatorFields(_m);
+            FillAngajatorFields((PvModelBase)_m);
             _m.CodInregistrare = GetText(_txtCod);
             _m.DataPV = GetDate(_dtpData);
             _m.TipPredare = GetTipPredare(_cmbTipPredare);
@@ -300,11 +163,11 @@ namespace ActAditionalPlugin.UI
             foreach (var item in _items) { var bun = item.GetBunItem(); if (bun != null) _m.Bunuri.Add(bun); }
         }
 
-        protected override string GetTemplatePath() => PluginConfig.GetTemplatePath(TipPV.Electronice);
+        protected override string GetTemplatePath() => _m.GetTemplatePath();
     }
 
     // ══════════════════════════════════════════════════════════
-    //  PV AUTOVEHICUL
+    //  PV AUTOVEHICUL — neschimbat
     // ══════════════════════════════════════════════════════════
     public class PvAutovehiculForm : PvFormBase
     {
@@ -340,7 +203,6 @@ namespace ActAditionalPlugin.UI
         {
             int y = 0;
 
-            // ── DATE DOCUMENT ─────────────────────────────────
             var pnlDoc = AddSectiune("DATE DOCUMENT", ref y, 66);
             _txtCod = MakeInput("ex. 26001/1");
             _dtpData = MakeDtp();
@@ -350,10 +212,6 @@ namespace ActAditionalPlugin.UI
             AddLabeledInput(tbl1, 1, "Data PV", _dtpData);
             AddLabeledInput(tbl1, 2, "Tip predare-primire", _cmbTipPredare);
 
-            // ── AL DOILEA PREDATOR (Art. 2) ───────────────────
-            // Rand 1: Nume | Functie
-            // Rand 2: CNP | CI Seria | CI Nr
-            // Rand 3: Domiciliu (full width)
             var pnlPred2 = AddSectiune("AL DOILEA PREDATOR (opțional) — Art. 2", ref y, 176);
             _txtNumePredator2 = MakeInput("ex. CHIRILA DUMITRU");
             _txtFunctiePredator2 = MakeInput("ex. DIRECTOR VANZARI");
@@ -373,12 +231,10 @@ namespace ActAditionalPlugin.UI
             var tblP3 = AddRow(pnlPred2, new[] { 100 });
             AddLabeledInput(tblP3, 0, "Domiciliu predator 2", _txtDomiciliuPredator2);
 
-            // ── DATE SUPLIMENTARE PRIMITOR (Art. 3) ───────────
             var pnlPrim = AddSectiune("DATE SUPLIMENTARE PRIMITOR — Art. 3", ref y, 66);
             _txtCISeria = MakeInput("ex. XT");
             _txtCINr = MakeInput("ex. 929646");
             _txtDomiciliu = MakeInput("ex. BOTOSANI, Str. ..., Nr. ...");
-            // Preumplut din ERP (PRSN.ADDRESS)
             if (!string.IsNullOrWhiteSpace(_m.Domiciliu))
             {
                 _txtDomiciliu.Text = _m.Domiciliu;
@@ -390,7 +246,6 @@ namespace ActAditionalPlugin.UI
             AddLabeledInput(tbl3, 1, "CI Nr.", _txtCINr);
             AddLabeledInput(tbl3, 2, "Domiciliu", _txtDomiciliu);
 
-            // ── DATE AUTOVEHICUL ──────────────────────────────
             var pnlVeh = AddSectiune("DATE AUTOVEHICUL", ref y, 120);
             _txtMarca = MakeInput("ex. IVECO");
             _txtNrInmatr = MakeInput("ex. BT 30 ESP");
@@ -405,7 +260,6 @@ namespace ActAditionalPlugin.UI
             AddLabeledInput(tblV2, 0, "An fabricație", _txtAnFab);
             AddLabeledInput(tblV2, 1, "Kilometri", _txtKm);
 
-            // ── STARE TEHNICA ─────────────────────────────────
             var pnlStare = AddSectiune("STARE TEHNICĂ", ref y, 120);
             _txtStareFunct = MakeInput("ex. buna");
             _txtAvarii = MakeInput("ex. -");
@@ -420,9 +274,6 @@ namespace ActAditionalPlugin.UI
             AddLabeledInput(tblS2, 1, "Anvelope spate", _txtAnvSpate);
             AddLabeledInput(tblS2, 2, "Uzură anvelope (%)", _txtUzura);
 
-            // ── DOTARI ────────────────────────────────────────
-            // Rand 1: Trusa | Extinctor | Triunghi | Cric
-            // Rand 2: Cheie | Vesta | Roata (DA/NU) | Uzura Roata (%)
             var pnlDot = AddSectiune("DOTĂRI (DA/NU)", ref y, 120);
             _cmbTrusa = MakeDaNu(); _cmbExtinctor = MakeDaNu();
             _cmbTriunghi = MakeDaNu(); _cmbCric = MakeDaNu();
@@ -441,7 +292,6 @@ namespace ActAditionalPlugin.UI
             AddLabeledInput(tblD2, 2, "Roată rezervă (DA/NU)", _cmbRoata);
             AddLabeledInput(tblD2, 3, "Uzură roată rezervă (%)", _txtUzuraRoata);
 
-            // ── DOCUMENTE VEHICUL ─────────────────────────────
             var pnlDocs = AddSectiune("DOCUMENTE VEHICUL (DA/NU)", ref y, 66);
             _cmbCertif = MakeDaNu(); _cmbRCA = MakeDaNu(); _cmbRovinieta = MakeDaNu();
             var tblDocs = AddRow(pnlDocs, new[] { 33, 33, 34 });
@@ -474,7 +324,6 @@ namespace ActAditionalPlugin.UI
             _m.DataPV = GetDate(_dtpData);
             _m.TipPredare = GetTipPredare(_cmbTipPredare);
 
-            // Predator 2 — uppercase aplicat in PvTemplateEngine
             _m.NumePredator2 = GetText(_txtNumePredator2);
             _m.FunctiePredator2 = GetText(_txtFunctiePredator2);
             _m.CNPPredator2 = GetText(_txtCNPPredator2);
@@ -482,12 +331,10 @@ namespace ActAditionalPlugin.UI
             _m.CINrPredator2 = GetText(_txtCINrPredator2);
             _m.DomiciliuPredator2 = GetText(_txtDomiciliuPredator2);
 
-            // Primitor — uppercase aplicat in PvTemplateEngine
             _m.CISeria = GetText(_txtCISeria);
             _m.CINr = GetText(_txtCINr);
             _m.Domiciliu = GetText(_txtDomiciliu);
 
-            // Vehicul — uppercase aplicat in PvTemplateEngine
             _m.MarcaAuto = GetText(_txtMarca);
             _m.NrInmatriculare = GetText(_txtNrInmatr);
             _m.SerieSasiu = GetText(_txtSerieSasiu);
@@ -499,7 +346,6 @@ namespace ActAditionalPlugin.UI
             _m.AnvelopeSpate = GetText(_txtAnvSpate);
             _m.UzuraAnvelope = GetText(_txtUzura);
 
-            // Dotari
             _m.TrusaSanitara = _cmbTrusa.SelectedItem?.ToString() ?? "DA";
             _m.Extinctor = _cmbExtinctor.SelectedItem?.ToString() ?? "DA";
             _m.TriunghiReflectorizant = _cmbTriunghi.SelectedItem?.ToString() ?? "DA";
@@ -509,7 +355,6 @@ namespace ActAditionalPlugin.UI
             _m.RoataRezervа = _cmbRoata.SelectedItem?.ToString() ?? "DA";
             _m.UzuraRoataRezervа = GetText(_txtUzuraRoata);
 
-            // Documente
             _m.CertificatInmatriculare = _cmbCertif.SelectedItem?.ToString() ?? "DA";
             _m.AsigurareRCA = _cmbRCA.SelectedItem?.ToString() ?? "DA";
             _m.Rovinieta = _cmbRovinieta.SelectedItem?.ToString() ?? "DA";
