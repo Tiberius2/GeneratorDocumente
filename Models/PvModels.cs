@@ -30,7 +30,7 @@ namespace ActAditionalPlugin.Models
         string CodInregistrare { get; set; }
         DateTime DataPV { get; set; }
         TipPredare TipPredare { get; set; }
-        string Mentiuni { get; set; }
+        string MentiuniDocument { get; set; }
         System.Collections.Generic.List<PvBunItem> Bunuri { get; set; }
         string GetTemplatePath();
     }
@@ -62,6 +62,9 @@ namespace ActAditionalPlugin.Models
         public string EmailCompanie { get; set; }
         public string WebsiteCompanie { get; set; }
 
+        // ── Mentiuni / Observatii ─────────────────────────────
+        public string MentiuniDocument { get; set; }
+
         protected PvModelBase()
         {
             CodInregistrare = string.Empty;
@@ -81,6 +84,7 @@ namespace ActAditionalPlugin.Models
             NrTelefonCompanie = string.Empty;
             EmailCompanie = string.Empty;
             WebsiteCompanie = string.Empty;
+            MentiuniDocument = string.Empty;
         }
 
         public string GetTipPredareText()
@@ -115,12 +119,10 @@ namespace ActAditionalPlugin.Models
     {
         public override TipPV TipPV { get { return TipPV.Echipamente; } }
         public System.Collections.Generic.List<PvBunItem> Bunuri { get; set; }
-        public string Mentiuni { get; set; }
 
         public PvEchipamenteModel()
         {
             Bunuri = new System.Collections.Generic.List<PvBunItem>();
-            Mentiuni = string.Empty;
         }
 
         public string GetTemplatePath() => PluginConfig.GetTemplatePath(TipPV.Echipamente);
@@ -130,12 +132,10 @@ namespace ActAditionalPlugin.Models
     {
         public override TipPV TipPV { get { return TipPV.Electronice; } }
         public System.Collections.Generic.List<PvBunItem> Bunuri { get; set; }
-        public string Mentiuni { get; set; }
 
         public PvElecroniceModel()
         {
             Bunuri = new System.Collections.Generic.List<PvBunItem>();
-            Mentiuni = string.Empty;
         }
 
         public string GetTemplatePath() => PluginConfig.GetTemplatePath(TipPV.Electronice);

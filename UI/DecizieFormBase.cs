@@ -15,8 +15,17 @@ namespace ActAditionalPlugin.UI
 
         protected TableLayoutPanel AddRandDecizie(Panel parent, int top)
         {
-            TxtCodInregistrare = MakeInput("ex. 26001/1");
+            TxtCodInregistrare = MakeReadonly();
+            CodInregistrareField = TxtCodInregistrare;
+            if (!string.IsNullOrEmpty(_model.CodInregistrare))
+                TxtCodInregistrare.Text = _model.CodInregistrare;
             DtpDataDecizie = MakeDtp();
+            DtpDataDecizie.ValueChanged += (s, e) =>
+            {
+                var svc = ActAditionalPlugin.Services.RegistraturaService.Instance;
+                if (svc != null && CodInregistrareField != null)
+                    CodInregistrareField.Text = svc.CalculateCod(DtpDataDecizie.Value.Date);
+            };
             var tbl = AddRow(parent, top, new[] { 40, 60 });
             AddLabeledInput(tbl, 0, "Cod înregistrare", TxtCodInregistrare, required: true);
             AddLabeledInput(tbl, 1, "Data decizie", DtpDataDecizie);
@@ -29,6 +38,9 @@ namespace ActAditionalPlugin.UI
             m.CodInregistrare = GetText(TxtCodInregistrare);
             m.DataDecizie = GetDate(DtpDataDecizie);
         }
+
+        protected override DateTime GetRegistraturaDate()
+            => DtpDataDecizie != null ? DtpDataDecizie.Value.Date : base.GetRegistraturaDate();
 
         protected bool ValidateDecizie()
         {

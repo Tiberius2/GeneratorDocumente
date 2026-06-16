@@ -123,7 +123,7 @@ namespace ActAditionalPlugin.Services
             {
                 int companyId = xSupport.ConnectionInfo.CompanyId;
                 var ds = xSupport.GetSQLDataSet(
-                    "SELECT PEX.CCCNUM06 AS NrCim, PEX.DATE05 AS DataCim " +
+                    "SELECT PEX.NUM03 AS NrCim, PEX.DATE03 AS DataCim " +
                     "FROM PRSEXTRA PEX " +
                     "JOIN PRSN P ON PEX.PRSN = P.PRSN " +
                     "WHERE PEX.PRSN = " + prsnId + " AND PEX.COMPANY = " + companyId);

@@ -3,6 +3,7 @@ using ActAditionalPlugin.Services;
 using ActAditionalPlugin.UI;
 using Softone;
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Windows.Forms;
 
@@ -63,17 +64,43 @@ namespace ActAditionalPlugin
                 var prsn = TryReadPrsn(companyId);
                 if (prsn == null) return base.ExecCommand(Cmd);
 
+                // Pre-incarca lista angajatilor angajati (pe thread-ul TXCode)
+                var angajati = LoadHiredEmployees(companyId);
+
                 ErpCimData cimData = ErpDataProvider.GetCimData(prsn.PrsnId, XSupport);
                 ErpCompanyData companyData = ErpDataProvider.GetCompanyData(XSupport);
                 string officialName = ReadOfficialName();
                 string adresaPrimitor = ReadAdresaPrimitor(prsn.PrsnId, companyId);
 
                 PdfSharp.Fonts.GlobalFontSettings.UseWindowsFontsUnderWindows = true;
-
+                RegistraturaService.Initialize(XSupport);
                 var thread = new Thread(() =>
                 {
                     try
                     {
+                        // ── Pas 1: Selector angajat ───────────────────────
+                        using (var picker = new AngajatPickerDialog(angajati, prsn.PrsnId))
+                        {
+                            _activeForm = picker;
+                            if (picker.ShowDialog() != DialogResult.OK) return;
+                            _activeForm = null;
+
+                            // Daca s-a schimbat angajatul, reincarca datele
+                            if (picker.SelectedPrsnId != prsn.PrsnId)
+                            {
+                                prsn = new PrsnInfo
+                                {
+                                    PrsnId = picker.SelectedPrsnId,
+                                    NumeSalariat = picker.SelectedName,
+                                    CNP = picker.SelectedCNP,
+                                    Functie = picker.SelectedFunctie
+                                };
+                                cimData = ErpDataProvider.GetCimData(prsn.PrsnId, XSupport);
+                                adresaPrimitor = ReadAdresaPrimitor(prsn.PrsnId, companyId);
+                            }
+                        }
+
+                        // ── Pas 2: Selector tip document ─────────────────
                         DocumentSelection selection;
                         using (var selector = new SelectorDialog())
                         {
@@ -182,6 +209,7 @@ namespace ActAditionalPlugin
                 case TipDocument.IncetareDemisie: m = new IncetareDemisieModel(); break;
                 case TipDocument.IncetareExpirare: m = new IncetareExpirareModel(); break;
                 case TipDocument.IncetareDisciplinar: m = new IncetareDisciplinarModel(); break;
+                case TipDocument.IncetarePerioadaProba: m = new IncetarePerioadaProbaModel(); break;
                 default: m = new ActAditionalModel(); break;
             }
 
@@ -200,7 +228,8 @@ namespace ActAditionalPlugin
             var disciplinar = m as IncetareDisciplinarModel;
             if (disciplinar != null && string.IsNullOrWhiteSpace(disciplinar.NumeIntocmit))
                 disciplinar.NumeIntocmit = officialName;
-
+            m.CodInregistrare = RegistraturaService.Instance.CalculateCod(
+            RegistraturaService.Instance.GetLoginDate());
             return m;
         }
 
@@ -219,6 +248,7 @@ namespace ActAditionalPlugin
                 case TipDocument.IncetareDemisie: return new IncetareDemisieForm((IncetareDemisieModel)model);
                 case TipDocument.IncetareExpirare: return new IncetareExpirareForm((IncetareExpirareModel)model);
                 case TipDocument.IncetareDisciplinar: return new IncetareDisciplinarForm((IncetareDisciplinarModel)model);
+                case TipDocument.IncetarePerioadaProba: return new IncetarePerioadaProbaForm((IncetarePerioadaProbaModel)model);
                 default: return null;
             }
         }
@@ -244,7 +274,8 @@ namespace ActAditionalPlugin
             var auto = m as PvAutovehiculModel;
             if (auto != null && !string.IsNullOrWhiteSpace(adresaPrimitor))
                 auto.Domiciliu = adresaPrimitor;
-
+            m.CodInregistrare = RegistraturaService.Instance.CalculateCod(
+            RegistraturaService.Instance.GetLoginDate());
             return m;
         }
 
@@ -267,6 +298,43 @@ namespace ActAditionalPlugin
         }
 
         // ── Helpers citire date ERP ───────────────────────────
+        private List<UI.AngajatPickerDialog.AngajatItem> LoadHiredEmployees(int companyId)
+        {
+            var result = new List<UI.AngajatPickerDialog.AngajatItem>();
+            try
+            {
+                // Angajati cu pozitie activa (JOBPOSITION != 0) — logica IsPrsnHired
+                string sql = string.Format(
+                    "SELECT DISTINCT P.PRSN, RTRIM(P.NAME) + ' ' + ISNULL(RTRIM(P.NAME2), '') AS NUMECOMPLET," +
+                    " ISNULL(P.AFM, '') AS CNP," +
+                    " ISNULL(P.SOTITLENAME, '') AS FUNCTIE" +
+                    " FROM PRSN P" +
+                    " INNER JOIN PRSJOBPOS J ON J.PRSN = P.PRSN AND J.COMPANY = {0}" +
+                    " WHERE J.JOBPOSITION IS NOT NULL AND J.JOBPOSITION <> 0" +
+                    " ORDER BY NUMECOMPLET", companyId);
+
+                var ds = XSupport.GetSQLDataSet(sql);
+                if (ds != null)
+                {
+                    for (int i = 0; i < ds.Count; i++)
+                    {
+                        int id = 0;
+                        int.TryParse(ds[i, "PRSN"]?.ToString() ?? string.Empty, out id);
+                        if (id == 0) continue;
+                        result.Add(new UI.AngajatPickerDialog.AngajatItem
+                        {
+                            PrsnId = id,
+                            Name = (ds[i, "NUMECOMPLET"]?.ToString() ?? string.Empty).Trim().ToUpper(),
+                            CNP = ds[i, "CNP"]?.ToString() ?? string.Empty,
+                            Functie = ds[i, "FUNCTIE"]?.ToString() ?? string.Empty
+                        });
+                    }
+                }
+            }
+            catch { }
+            return result;
+        }
+
         private PrsnInfo TryReadPrsn(int companyId)
         {
             var prsnTbl = XModule.GetTable("PRSN");
@@ -378,13 +446,6 @@ namespace ActAditionalPlugin
                 int companyId = XSupport.ConnectionInfo.CompanyId;
                 if (pvTable == null || pvTable.Current == null) return;
                 pvTable.Current.Append();
-                //SafeSetField(pvTable, "COMPANY", companyId);
-                //SafeSetField(pvTable, "PRSN", model.PrsnId);
-                //SafeSetField(pvTable, "CCCTRNDATE", DateTime.Now);
-                //SafeSetField(pvTable, "CODINREGISTRARE", model.CodInregistrare);
-                //SafeSetField(pvTable, "CCCPVTYPE", GetPvTypeCode(model.TipPV));
-                //SafeSetField(pvTable, "CCCPVNAME", GetPvObservatii(model));
-                //SafeSetField(pvTable, "CCCPVNUMBER", GetPvNumber(model.CodInregistrare));
                 pvTable.Current["PRSN"] = model.PrsnId;
                 pvTable.Current["CCCTRNDATE"] = DateTime.Now;
                 pvTable.Current["CODINREGISTRARE"] = model.CodInregistrare;
@@ -392,7 +453,7 @@ namespace ActAditionalPlugin
                 pvTable.Current["CCCPVNAME"] = GetPvObservatii(model);
                 pvTable.Current["CCCPVNUMBER"] = GetPvNumber(model.CodInregistrare);
                 pvTable.Current.Post();
-               // this.XModule.Exec("Button:Save");
+                this.XModule.Exec("Button:Save");
             }
             catch (Exception ex)
             {
@@ -435,7 +496,7 @@ namespace ActAditionalPlugin
                     SafeSetField(tbl, "CCCDATAVIGOARE", model.DataVigoare);
                 SafeSetField(tbl, "CCCDOCUMENTSTATUS", 1);
                 tbl.Current.Post();
-                //this.XModule.Exec("Button:Save");
+                this.XModule.Exec("Button:Save");
             }
             catch (Exception ex)
             {
@@ -464,7 +525,7 @@ namespace ActAditionalPlugin
                 SafeSetField(tbl, "CCCSTATUS", 1);
                 SafeSetField(tbl, "CCCTIPDCZ", GetDecizieTipText(model.TipDocument));
                 tbl.Current.Post();
-                //this.XModule.Exec("Button:Save");
+                this.XModule.Exec("Button:Save");
             }
             catch (Exception ex)
             {
@@ -529,13 +590,9 @@ namespace ActAditionalPlugin
 
         private static string GetPvObservatii(PvModelBase model)
         {
-            var echip = model as PvEchipamenteModel;
-            if (echip != null && !string.IsNullOrWhiteSpace(echip.Mentiuni))
-                return echip.Mentiuni.Trim();
-            var elec = model as PvElecroniceModel;
-            if (elec != null && !string.IsNullOrWhiteSpace(elec.Mentiuni))
-                return elec.Mentiuni.Trim();
-            return "-";
+            return !string.IsNullOrWhiteSpace(model.MentiuniDocument)
+                ? model.MentiuniDocument.Trim()
+                : "-";
         }
 
         private static string GetDecizieTipText(TipDocument tip)
@@ -551,6 +608,7 @@ namespace ActAditionalPlugin
                 case TipDocument.IncetareDemisie: return "Incetare demisie";
                 case TipDocument.IncetareExpirare: return "Expirare termen";
                 case TipDocument.IncetareDisciplinar: return "Concediere disciplinara";
+                case TipDocument.IncetarePerioadaProba: return "Incetare perioada proba";
                 default: return tip.ToString();
             }
         }

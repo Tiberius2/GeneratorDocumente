@@ -1,279 +1,312 @@
-# ActAditionalPlugin + PV Plugin — Rezumat proiect (actualizat 22.04.2026)
+# Generator Documente HR — Context Proiect
 
-## Tehnologii
-- C# .NET Framework 4.7.2, WinForms
-- Softone ERP plugin (TXCode architecture), `[WorksOn("PRSNIN")]`
-- DocumentFormat.OpenXml (Open XML SDK) — fill template .docx
-- Word Interop (late binding) — conversie .docx → .pdf
-- PdfiumViewer (NuGet) — preview PDF
-- Cmd 4000501 = Decizii + Acte Adiționale
-- Cmd 4000502 = Procese Verbale
+## Descriere generala
+Plugin Softone ERP (.NET 4.7.2, WinForms, TXCode architecture) pentru generarea documentelor HR ca PDF din template-uri Word.  
+Entry point: **CMD 4000501** (singurul — 4000502 eliminat).  
+Lucreaza pe ecranul `PRSNIN` (`[WorksOn("PRSNIN")]`).
 
-## Culoare temă
-`RGB(63, 129, 198)` — consistent în toată aplicația
+---
 
-## Variabile de sistem
-- `RecruitmentDocsPath` — folderul candidaților (unde se salvează PDF-urile)
-- `TemplateDocsPath` — folderul cu template-urile .docx
+## Stack tehnic
+- .NET 4.7.2 WinForms
+- PdfSharp, PdfiumViewer (preview PDF)
+- Word Interop + OpenXML (generare DOCX → PDF)
+- Newtonsoft.Json (clauze act aditional + alte modele)
+- Costura.Fody (embed DLL-uri)
+- Softone TXCode API: `XSupport`, `XModule`, `XTable`, `XRow`
 
-## Structura fișierelor
+---
+
+## Structura fisiere
 
 ```
 Models/
-  DocumentModels.cs   ← modele decizii + acte
-  PvModels.cs         ← modele PV (PvBunItem, PvEchipamenteModel, PvElecroniceModel, PvAutovehiculModel)
-  PluginConfig.cs     ← GetTemplatePath(TipDocument/TipPV), date angajator hardcodate (fallback)
+  DocumentModels.cs       ← DocumentModelBase + toate modelele decizii/acte
+  PvModels.cs             ← PvModelBase + modele PV + IPvBunuriModel
+  DocumentTheme.cs        ← 4 palete de culori per categorie
+  SelectionTypes.cs       ← DocSelection / PvSelection (discriminated union)
+  PluginConfig.cs         ← template paths, date companie fallback
+  ClauzeConfig.cs         ← ClauzeActAditional, CampClauza, ClauzeConfig (JSON model)
 
 Services/
-  WordHelper.cs           ← utilitare OpenXML+Word Interop partajate (MergeAndReplace, MakeRun,
-                             MakeRunWithBreaks, BuildPosMap, BuildRuns, GetText,
-                             ConvertToPdf, SanitizeFileName)
-  TemplateEngine.cs       ← fill + PDF decizii/acte (foloseste WordHelper)
-  PvTemplateEngine.cs     ← fill + PDF procese verbale (foloseste WordHelper)
-  ErpDataProvider.cs      ← GetCimData + GetCompanyData
-  ClauzeTextBuilder.cs    ← builder text clauze act adițional
+  RegistraturaService.cs  ← calcul cod YYddd/NR, INSERT CCCVREGISTRATURA + CCCVDOCAUDIT
+  TemplateEngine.cs       ← fill + generate PDF pentru documente
+  PvTemplateEngine.cs     ← fill + generate PDF pentru PV
+  ErpDataProvider.cs      ← GetCimData (NUM03, DATE03), GetCompanyData
+  WordHelper.cs           ← OpenXML + Word Interop utilities
+  ClauzeService.cs        ← Load/Save clauze_act_aditional.json din %TemplateDocsPath%
 
 UI/
-  DocumentFormBase.cs      ← baza formulare decizii/acte
-  DecizieFormBase.cs       ← baza decizii (TxtCodInregistrare, DtpDataDecizie)
-  ActAditionalForm.cs      ← formular act adițional
-  DeciziiSuspendare.cs     ← 5 clase suspendare
-  DeciziiIncetare.cs       ← 3 clase încetare
-  PunctModificareControl.cs← control clauze act adițional
-  PdfPreviewForm.cs        ← preview PDF (PdfiumViewer), buton "Salvează PDF"
-  DocumentSelectorDialog.cs← selector tip document (decizii/acte)
-  PvSelectorDialog.cs      ← selector tip PV
-  PvFormBase.cs            ← baza formulare PV
-  PvForms.cs               ← PvEchipamenteForm, PvElectroniceForm, PvAutovehiculForm
-  EchipamentItemControl.cs ← control item echipament (Denumire + Cantitate NumericUpDown + Preț)
+  FormBase.cs             ← baza UI comuna: tema, shell, layout helpers, PDF flow
+  DocumentFormBase.cs     ← extinde FormBase: sectiune angajat cu CIM, TemplateEngine
+  PvFormBase.cs           ← extinde FormBase: sectiune angajat fara CIM, PvTemplateEngine
+  DecizieFormBase.cs      ← baza decizii (TxtCodInregistrare, DtpDataDecizie)
+  SelectorDialog.cs       ← selector unificat 4 categorii cu carduri
+  ConfirmareDialog.cs     ← prompt confirmare inregistrare (stilizat tema)
+  SuccessDialog.cs        ← dialog succes dupa generare
+  PdfPreviewForm.cs       ← previzualizare PDF cu tema categoriei
+  ActAditionalForm.cs     ← formular Act Aditional
+  DeciziiSuspendare.cs    ← 6 forme suspendare
+  DeciziiIncetare.cs      ← 5 forme incetare (inclusiv IncetarePerioadaProba)
+  PvForms.cs              ← PvBunuriForm (Echipamente+Electronice) + PvAutovehiculForm
+  PunctModificareControl.cs ← control punct modificare, JSON-driven din ClauzeConfig
+  ClauzeEditorDialog.cs   ← dialog editor clauze act aditional (add/edit/delete)
+  EchipamentItemControl.cs
 
-PluginEntry.cs  ← ExecCommand 4000501+4000502, Mutex single instance, factories, datagrid INSERT
+PluginEntry.cs            ← single entry 4000501, factory unificat, RegistraturaService.Initialize
 ```
 
-## Modele — ierarhie
+---
 
-### Decizii/Acte
-```
-DocumentModelBase                    ← PrsnId, NumeSalariat, CNP, Functie, NrCim, DataCim + angajator
-├── ActAditionalModel                ← CodInregistrare, DataEmitereAct, DataVigoare, List<PunctModificare>
-└── DecizieModelBase                 ← CodInregistrare, DataDecizie
-    ├── DecizieModelCuCerere         ← NrCerere, DataCerere
-    │   ├── SuspendareCresterecopilModel
-    │   ├── SuspendareCresterecopilHandicapModel
-    │   ├── SuspendareAcordPartiModel
-    │   ├── SuspendareSiIncetareSuspendareModel
-    │   ├── IncetareSuspendareModel
-    │   └── IncetareDemisieModel
-    └── direct din DecizieModelBase
-        ├── SuspendareAbsenteNemotivateModel ← NrReferat, DataReferat, IntocmitDe, IncludeIncetare
-        ├── IncetareExpirareModel
-        └── IncetareDisciplinarModel
-```
+## Modele documente
 
-### PV
-```
-PvModelBase                ← CodInregistrare, DataPV, TipPredare, NumeSalariat, CNP, Functie + angajator
-├── PvEchipamenteModel     ← List<PvBunItem> Bunuri, Mentiuni
-├── PvElecroniceModel      ← List<PvBunItem> Bunuri, Mentiuni
-└── PvAutovehiculModel     ← (detalii mai jos)
-```
+### TipDocument enum → PK CCCTIPDOCREG
+| TipDocument | Descriere | PK |
+|---|---|---|
+| ActAditional | Act Adițional | 2 |
+| SuspendareCresterecopil | Decizie Suspendare Creștere Copil | 11 |
+| SuspendareCresterecopilHandicap | Decizie Suspendare Creștere Copil Handicap | 11 |
+| SuspendareAbsenteNemotivate | Decizie Suspendare Absențe Nemotivate | 11 |
+| SuspendareAcordParti | Decizie Suspendare Acordul Părților | 11 |
+| SuspendareSiIncetareSuspendare | Decizie Suspendare și Încetare | 11 |
+| IncetareSuspendare | Decizie Încetare Suspendare | 11 |
+| IncetareDemisie | Decizie Încetare prin Demisie | 11 |
+| IncetareExpirare | Decizie Încetare prin Expirare Termen | 11 |
+| IncetareDisciplinar | Decizie Concediere Disciplinară | 11 |
+| IncetarePerioadaProba | Decizie Încetare Perioadă de Probă | 11 |
 
-`PvBunItem`: `Nume`, `Cantitate`, `Pret`
+### TipPV enum → PK CCCTIPDOCREG
+| TipPV | PK |
+|---|---|
+| Echipamente | 22 |
+| Electronice | 22 |
+| Autovehicul | 22 |
 
-### PvAutovehiculModel — câmpuri complete
-```
-// Al doilea predator (Art. 2)
-NumePredator2, FunctiePredator2, CNPPredator2, CISeriaPredator2, CINrPredator2, DomiciliuPredator2
+---
 
-// Primitor (Art. 3) — Domiciliu preumplut din PRSN.ADDRESS
-CISeria, CINr, Domiciliu
+## Teme culori (DocumentTheme)
 
-// Vehicul
-MarcaAuto, NrInmatriculare, SerieSasiu, AnFabricatie, Kilometri
-StareFunctionare, Avarii, AnvelopeFata, AnvelopeSpate, UzuraAnvelope
+| Categorie | Culoare | Accent RGB |
+|---|---|---|
+| Acte Adiționale | Albastru | (63, 129, 198) |
+| Decizii Suspendare | Teal | (32, 158, 145) |
+| Decizii Încetare | Rose | (192, 72, 68) |
+| Procese Verbale | Amber | (192, 120, 30) |
 
-// Dotări (DA/NU)
-TrusaSanitara, Extinctor, TriunghiReflectorizant, Cric, CheieRoti, VestaReflectorizanta
-RoataRezervа, UzuraRoataRezervа    ← fără diacritice în proprietate și placeholder
+Fiecare temă are: `Accent`, `AccentPal`, `AccentBorder`, `AccentDark`.
 
-// Documente
-CertificatInmatriculare, AsigurareRCA, Rovinieta
-```
+---
 
-**Important**: Placeholder-ele în template-uri NU au diacritice:
-`{{RoataRezervа}}`, `{{UzuraRoataRezervа}}` (litera `a` normală, nu `ă`)
+## Registratura (CCCVREGISTRATURA)
 
-### TipPredare (enum)
-`Simplu=0, Exploatare=1, Mentenanta=2, Custodie=3, Administrare=4, Receptie=5, Relocare=6, CasareScoatere=7`
+### Cod înregistrare format
+`YYddd/NR` — ex: `26133/5`  
+- `YY` = ultimele 2 cifre an  
+- `ddd` = ziua din an (001-366)  
+- `NR` = MAX(NRINREG)+1 per zi
 
-## Cod înregistrare
-- Format: `YYddd/#nr` (ex: `26001/1`)
-- Validat cu regex `^(\d{2})(\d{3})/(\d+)$`
-- În numele fișierului: `/` → `-` via `WordHelper.SanitizeFileName`
+### Data înregistrare
+Codul se calculează pe baza datei din câmpul de dată al formularului (nu loginDate fix).  
+`FormBase` expune `protected virtual DateTime GetRegistraturaDate()` — fallback la `loginDate`.  
+Override-uri:
+- `DecizieFormBase` → `DtpDataDecizie.Value.Date`
+- `ActAditionalForm` → `_dtpDataAct.Value.Date`
+- `PvBunuriForm` / `PvAutovehiculForm` → `_dtpData.Value.Date`
 
-## Naming PDF
-```
-Act_Aditional_{CodInregistrare}_{Data}.pdf
-Decizie_{Tip}_{CodInregistrare}_{Data}.pdf    ex: Decizie_Incetare_Demisie_26063-2_04.03.2026.pdf
-PV_{Tip}_{CodInregistrare}_{Data}.pdf         ex: PV_Autovehicul_26001-1_20.04.2026.pdf
-```
+La schimbarea datei din DTP, `CodInregistrareField` se actualizează live via `ValueChanged`.
 
-## Template-uri (.docx în %TemplateDocsPath%)
-### Decizii/Acte
-- `ActAditional_template.docx`
-- `template_suspendare_crestere_copil.docx`
-- `template_suspendare_crestere_copil_handicap.docx`
-- `template_suspendare_absente_nemotivate.docx`
-- `template_suspendare_absente_nemotivate_fara_incetare.docx`
-- `template_suspendare_acord_parti.docx`
-- `template_suspendare_si_incetare_suspendare.docx`
-- `template_incetare_suspendare.docx`
-- `template_incetare_demisie.docx`
-- `template_incetare_expirare_termen.docx`
-- `template_incetare_disciplinar.docx`
+### Parametri INSERT
+- `DATAINREG` = data selectată de user în formular
+- `DIRECTIE` = 3 (Intern)
+- `STATUS` = 1 (Înregistrat)
+- `TIPTERT` = 5 (Angajat)
+- `PRSNTERT` = model.PrsnId
 
-### PV
-- `template_pv_echipamente.docx` ← folosit și pentru Electronice
-- `template_pv_autovehicul.docx`
+### Tabele
+- `CCCVREGISTRATURA` — înregistrări principale
+- `CCCVDOCAUDIT` — audit trail modificări
+- `CCCTIPDOCREG` — tipuri documente configurabile
 
-## Placeholder-e comune (toate documentele)
-```
-{{NumeAngajator}}, {{CIFAngajator}}, {{AdresaCompanie}}, {{ZipCompanie}},
-{{NrRegComertului}}, {{IbanCompanie}}, {{NrTelefonCompanie}},
-{{EmailCompanie}}, {{WebsiteCompanie}}, {{ReprezentantLegal}},
-{{FunctieReprezentant}}, {{CodInregistrare}}, {{NumeSalariat}},
-{{CNP}}, {{Functie}}, {{NrCim}}, {{DataCim}}
-```
+### SQL execute
+`XSupport.ExecuteSQL(sql)` — pentru INSERT
 
-### Placeholder-e PV Autovehicul
-```
-{{TipPredare}}, {{DataPV}},
-{{NumePredator2}}, {{FunctiePredator2}}, {{CNPPredator2}},
-{{CISeriaPredator2}}, {{CINrPredator2}}, {{DomiciliuPredator2}},
-{{CISeria}}, {{CINr}}, {{Domiciliu}},
-{{MarcaAuto}}, {{NrInmatriculare}}, {{SerieSasiu}},
-{{AnFabricatie}}, {{Kilometri}}, {{StareFunctionare}}, {{Avarii}},
-{{AnvelopeFata}}, {{AnvelopeSpate}}, {{UzuraAnvelope}},
-{{TrusaSanitara}}, {{Extinctor}}, {{TriunghiReflectorizant}}, {{Cric}},
-{{CheieRoti}}, {{VestaReflectorizanta}}, {{RoataRezervа}}, {{UzuraRoataRezervа}},
-{{CertificatInmatriculare}}, {{AsigurareRCA}}, {{Rovinieta}}
-```
-**Uppercase** aplicat în `PvTemplateEngine.AddAutovehiculPlaceholders` pentru:
-NumePredator2, FunctiePredator2, CISeriaPredator2, DomiciliuPredator2, CISeria, Domiciliu,
-MarcaAuto, NrInmatriculare, SerieSasiu. CNP-urile și câmpurile descriptive NU sunt uppercase.
+---
 
-Art. 5, 6, 7 sunt hardcodate în template — nu sunt placeholder. Art. 7 conține `{{NumeSalariat}}`.
+## Mențiuni / Observații
 
-## ERP Data
-- `GetCimData(prsnId, xSupport)`:
-  - câmp: `PRSEXTRA.CCCNUM06` (NrCim — tip int în ERP custom) / `DATE05` (DataCim)
-  - conversie: `Convert.ToInt32(nrCimObj).ToString()` — evita valori float reziduale
-  - fallback la `string.Empty` dacă câmpul e null/DBNull
-- `GetCompanyData(xSupport)` → SQL JOIN COMPANY+COMPANYEXT+PRSN+SPECIALTY
-- `officialName` → `USERS.NAME` via `XSupport.ConnectionInfo.UserId`
-- `adresaPrimitor` → `SELECT P.ADDRESS FROM PRSN P WHERE P.PRSN={id} AND P.COMPANY={companyId}`
-  preumple `Domiciliu` în `PvAutovehiculModel`
-- Toate SQL-urile folosesc `int companyId = xSupport.ConnectionInfo.CompanyId` — niciun ID hardcodat
-- Fallback la `PluginConfig` hardcodat dacă SQL eșuează
+Toate tipurile de documente (decizii, acte, PV) au secțiunea **MENȚIUNI / OBSERVAȚII** la finalul formularului.
 
-## PluginEntry — arhitectură internă
+- Câmpul `protected TextBox _txtMentiuni` definit în `FormBase`
+- Metoda `protected Panel AddMentiuniSection(ref int y)` în `FormBase` — adaugă secțiunea
+- `protected virtual void PopulateMentiuni()` în `FormBase` — apelat după `PopulateModel()`
+- Override în `DocumentFormBase` și `PvFormBase` → scrie în `model.MentiuniDocument`
+- Proprietatea `MentiuniDocument` există pe `DocumentModelBase` și `PvModelBase`
+- Placeholder în template: `{{MentiuniDocument}}`
 
-### Clasa PrsnInfo (nested private)
-```csharp
-private class PrsnInfo { int PrsnId; string NumeSalariat; string CNP; string Functie; }
+**Notă ActAditional:** secțiunea Mențiuni e plasată ÎNAINTE de secțiunea MODIFICĂRI (din cauza panelului cu scroll dinamic al modificărilor).
+
+---
+
+## Clauze Act Adițional (JSON-driven)
+
+### Fișier configurare
+`%TemplateDocsPath%\clauze_act_aditional.json`  
+Creat automat cu valori default la prima rulare dacă nu există.
+
+### Structura JSON
+```json
+{
+  "clauze": [
+    {
+      "id": "fct001",
+      "titlu": "Functie / COR (Lit. F)",
+      "textClauza": "La litera F, ... se modifica si va avea urmatorul cuprins:",
+      "textDinamic": "Functia/meseria: {0} conform COR, cod {1}.",
+      "campuri": [
+        { "label": "Functie noua", "placeholder": "ex. BRUTAR", "ordine": 0 },
+        { "label": "Cod COR", "placeholder": "ex. 751201", "ordine": 1 }
+      ],
+      "activ": true
+    }
+  ]
+}
 ```
 
-### Metode helper extrase
-- `TryReadPrsn(int companyId) → PrsnInfo?` — citire PRSN table + SQL SOTITLENAME; returnează null dacă datele lipsesc
-- `ReadOfficialName() → string` — USERS.NAME pentru userul logat
-- `ReadAdresaPrimitor(prsnId, companyId) → string` — PRSN.ADDRESS pentru Domiciliu PV Autovehicul
-- `SetFormIcon(Form)` — static, aplică softone.ico pe orice formular
-- `ApplyCompanyData(DocumentModelBase, ErpCompanyData)` — populează 11 câmpuri angajator sau fallback PluginConfig
-- `ApplyCompanyData(PvModelBase, ErpCompanyData)` — idem pentru modele PV
+- `textClauza` = text static (referința articolului)
+- `textDinamic` = text cu `{0}`, `{1}` înlocuite cu valorile introduse de user
+- `campuri` = câmpurile de input generate dinamic în `PunctModificareControl`
+- `activ` = false ascunde clauza din dropdown fără să o șteargă
 
-### Semnături factories
-```csharp
-private static DocumentModelBase CreateModel(TipDocument tip, PrsnInfo prsn,
-    ErpCimData cimData, string officialName, ErpCompanyData companyData)
+### Editare clauze
+Din `ActAditionalForm`, butonul **"⚙ Editează clauze"** deschide `ClauzeEditorDialog`.  
+Editorul permite add/edit/delete clauze și câmpuri. La salvare, scrie JSON-ul pe disk.  
+La revenire din editor, toate `PunctModificareControl`-urile existente sunt actualizate via `SetClauze()`.
 
-private static PvModelBase CreatePvModel(TipPV tip, PrsnInfo prsn,
-    ErpCompanyData companyData, string adresaPrimitor)
+### PunctModificareControl
+- Dropdown populat din JSON (doar clauzele cu `activ=true`) + "Text liber" built-in
+- La selecție: generează câmpuri de input din `campuri[]`
+- Preview calculat via `string.Format(textDinamic, values)`
+- Buton "✎ Editează" pentru override manual al textului generat
+- `GetPunct()` returnează `PunctModificare { Referinta, TextModificare }`
 
-private static Form CreatePvForm(TipPV tip, PvModelBase model, Action<PvModelBase> onPdfGenerated)
+---
+
+## Date ERP
+
+### GetCimData (ErpDataProvider)
+```sql
+SELECT PEX.NUM03 AS NrCim, PEX.DATE03 AS DataCim
+FROM PRSINEXTRA PEX WHERE PEX.PRSN = :prsnId
 ```
 
-## Single Instance
-- `Mutex` named `"ActAditionalPlugin_SingleInstance"`
-- `_activeForm` setat pe selector + formular + re-selector
+### GetCompanyData
+Citit din Softone via XSupport, fallback din `PluginConfig`.
 
-## WordHelper — utilitare partajate (Services/WordHelper.cs)
-Clasă `internal static` folosită de ambele engines:
-- `SanitizeFileName(string)` — `/` → `-`, caractere invalide → `_`
-- `GetText(OpenXmlElement)` — concatenează toate Text descendants
-- `MergeAndReplace(Paragraph, Dictionary)` — merge runs + replace cu păstrare RunProperties;
-  skip dacă niciun placeholder găsit și textul nu conține `{{`
-- `MakeRun(string, RunProperties)` — Run cu Space=Preserve dacă text începe/termină cu spațiu
-- `MakeRunWithBreaks(string, RunProperties)` — `\r\n` / `\n` → `<w:br/>` în același Run
-- `BuildPosMap(segments)` — hartă poziție → RunProperties pentru rebuild formatting
-- `BuildRuns(orig, replaced, map, posToRpr)` — reconstruiește runs cu formatting corect după replace
-- `ConvertToPdf(docxPath, pdfPath)` — Word Interop late binding, ExportAsFixedFormat=17
-
-## TemplateEngine — funcționalități cheie
-- `GeneratePdf`, `FillTemplatePublic`, `ConvertToPdfPublic` — entry points
-- `FillTemplate` → `ExpandModificariTable` + `InjectArticoleFinal` + `BuildPlaceholders` + `ReplaceInBody`
-- `ExpandModificariTable`: clonat rând template, replace per rând via `WordHelper.MergeAndReplace`
-- `InjectArticoleFinal`: numără Art.N în text, calculează `_artCompartiment` / `_artContestatie`
-- `[ThreadStatic]` pe `_artCompartiment` / `_artContestatie`
-- `ReplaceInBody` → `WordHelper.MergeAndReplace` pe fiecare paragraf
-- Toate metodele de helpers OpenXML delegate la `WordHelper`
-
-## PvTemplateEngine — funcționalități cheie
-- `ExpandBunuriTable`: găsește tabelul cu `{{BunNume}}`, clonează rândul template per bun
-- `AddAutovehiculPlaceholders`: injectare câmpuri autovehicul cu uppercase selectiv
-- `ReplaceInBody` → `WordHelper.MergeAndReplace` pe fiecare paragraf
-- Toate metodele de helpers OpenXML delegate la `WordHelper`
-
-## DocumentFormBase — mecanisme cheie
-- `public static Action<DocumentModelBase> OnDocumentGenerated` — callback setat de `PluginEntry`
-  înainte de deschiderea thread-ului STA; invocat după fiecare PDF generat cu succes
-- `OnDocumentGenerated?.Invoke(_model)` în `BtnGenPdf_Click` și `BtnPreview_Click` (după confirmare)
-- Șters în `finally` din thread-ul STA
-- `FillAngajator(DocumentModelBase)` — completează câmpurile angajator din `PluginConfig` (fallback UI)
-
-## PvFormBase — mecanisme cheie
-- Constructor: `PvFormBase(PvModelBase model, string titlu, Action<PvModelBase> onPdfGenerated = null)`
-- `_onPdfGenerated?.Invoke(_model)` după fiecare PDF generat cu succes (gen + preview confirmed)
-- `MakeTipPredareCombo()` + `GetTipPredare(ComboBox)` — dropdown cu 8 tipuri
-- `AddSectiune(ref y, height)` → FlowLayoutPanel alb cu border
-- `AddRow(parent, colPercents[])` → TableLayoutPanel fără param `top` (diferit față de DocumentFormBase)
-
-## ActAditionalForm — scroll fix
-- `_pnlModificari.AutoScroll = true` — scroll intern când punctele depășesc înălțimea panoului
-- Anchors: `Left | Right | Top | Bottom` — se extinde cu fereastra
-
-## Inserare în datagrid-uri ERP după generare PDF
-
-### PV → CCCPVEMISE (via `AddPvToDatagrid` în PluginEntry)
+### OfficialName
+```sql
+SELECT NAME FROM USERS WHERE USERS = :userId
 ```
-PRSN, CCCTRNDATE, CCCPVTYPE (int: 1=Echipamente, 6=Electronice, 2=Autovehicul),
-CCCPVNAME (mentiuni sau "-"), CCCPVNUMBER (nr după "/" din CodInregistrare)
+
+---
+
+## Flow principal
+
 ```
-Mecanism: `pvTable.Current.Append()` → setare câmpuri → `pvTable.Current.Post()` → `XModule.Exec("Button:Save")`
+ExecCommand(4000501)
+  → RegistraturaService.Initialize(XSupport)
+  → TryReadPrsn() — citeste PRSN curent
+  → GetCimData(), GetCompanyData(), ReadOfficialName()
+  → STA Thread:
+      → SelectorDialog (4 categorii, carduri)
+      → CreateForm(DocSelection/PvSelection)
+          → model.CodInregistrare = RegistraturaService.CalculateCod(loginDate)
+      → Form.ShowDialog()
+          → "Previzualizează & Generează" → PdfPreviewForm
+          → "Salvează PDF" → OnBeforeGenerate()
+              → ConfirmareDialog (titlu, cod, data, tema)
+              → RegistraturaService.Inregistreaza()
+              → DoGenerateFinalPdf()
+              → SuccessDialog (titlu, cod, data, tema)
+              → Close()
+```
 
-### Decizii/Acte → tabele custom ERP (via `AddDocumentToDatagrid` în PluginEntry)
-- **Act Adițional** → `CCCACTEADITIONALE`:
-  `COMPANY, PRSN, CCCCODINREG, CCCNRINREG, CCCIDCONTRACT (NrCim), CCCDATAINREG, CCCDATAVIGOARE, CCCDOCUMENTSTATUS=1`
-- **Decizii** → `CCCDCZCONTRACT`:
-  `COMPANY, PRSN, CCCCODINREG, CCCNRINREG, CCCIDCONTRACT (NrCim parsed int), CCCDATAINREG, CCCDATAVIGOARE (DataDecizie), LINENUM=1, CCCSTATUS=1, CCCTIPDCZ (text tip)`
-- `int companyId = XSupport.ConnectionInfo.CompanyId` declarat local în fiecare metodă de insert
-- `SafeSetField(dynamic table, string field, object value)` — try/catch pentru câmpuri opționale
-- `GetSoftoneLoginDate()` — reflection pe `ConnectionInfo.LoginDate`
-- `GetPvNumber(codInregistrare)` — extrage nr după `/`
+---
 
-## Preferințe cod
-- Minimal diffs când e posibil, fișiere complete pentru schimbări structurale
-- Comentarii concise în română
-- UI strings în română
-- Placeholder-e fără diacritice
-- Fără `PdfGenerator.cs` — înlocuit complet de `TemplateEngine`
-- Niciun ID hardcodat în SQL — totul prin `companyId = xSupport.ConnectionInfo.CompanyId`
+## Arhitectura UI
+
+### FormBase (abstract)
+- Tema per categorie (`DocumentTheme`)
+- Shell: header colorat + body scrollabil + footer cu butoane
+- Buton unic: **"▶ Previzualizează & Generează"** (FlatStyle.Popup)
+- Abstract: `BuildAngajatSection()`, `ValidateForm()`, `PopulateModel()`, `GetTemplatePath()`, `FillDocxTemplate()`, `DoGenerateFinalPdf()`
+- Virtual: `OnBeforeGenerate()`, `PopulateMentiuni()`, `GetRegistraturaDate()`
+- `CodInregistrareField` — TextBox readonly setat de subclase, actualizat după recalcul cod
+- `_txtMentiuni` — TextBox protected, populat via `PopulateMentiuni()` după `PopulateModel()`
+- `AddMentiuniSection(ref y)` — helper care adaugă secțiunea MENȚIUNI / OBSERVAȚII
+- `ShowSuccessAndClose()` → afișează SuccessDialog, apoi Close()
+
+### Sectiuni (`AddSectiune`)
+Header-band cu bara laterala 4px (Accent), fundal AccentPal, text 10pt Segoe UI Semibold.
+
+### Campuri readonly
+`BackColor = Color.FromArgb(208, 213, 226)` — vizibil diferit față de fundal.
+
+---
+
+## Template placeholders
+
+### Comune (toate documentele)
+`{{NumeSalariat}}`, `{{CNP}}`, `{{NrCim}}`, `{{DataCim}}`, `{{Functie}}`,  
+`{{NumeAngajator}}`, `{{CIFAngajator}}`, `{{ReprezentantLegal}}`, `{{AdresaCompanie}}`,  
+`{{ZipCompanie}}`, `{{NrRegComertului}}`, `{{IbanCompanie}}`, `{{NrTelefonCompanie}}`,  
+`{{EmailCompanie}}`, `{{WebsiteCompanie}}`, `{{CodInregistrare}}`, `{{ArticolCompartiment}}`,  
+`{{ArticolContestatie}}`, **`{{MentiuniDocument}}`**
+
+### IncetarePerioadaProba (specifice)
+`{{DataDecizie}}`, `{{DataIncetare}}`, `{{NrNotificare}}`, `{{DataNotificare}}`
+
+---
+
+## Conventii importante
+
+- Toate stringurile UI în **română**
+- Nu se deschide PDF în Adobe după generare
+- Cod înregistrare **readonly** în formulare (recalculat la schimbarea datei)
+- `FillAngajator()` și `FillAngajatorFields()` = **no-op**
+- `DocumentModelBase.CodInregistrare` și `MentiuniDocument` pe baza (nu pe subclase)
+- `PvModelBase.MentiuniDocument` pe baza (nu pe subclase PV)
+- `IPvBunuriModel` expune `MentiuniDocument` (nu `Mentiuni`)
+- `ClauzeTextBuilder.cs` — păstrat dar neutilizat pentru clauze noi (înlocuit de JSON)
+
+---
+
+## Tabele Softone folosite
+
+| Tabel | Scop |
+|---|---|
+| PRSN | Date angajat curent |
+| PRSINEXTRA | NrCim (NUM03), DataCim (DATE03) |
+| USERS | Nume official (oficiant) |
+| CCCVREGISTRATURA | Registratura documente |
+| CCCVDOCAUDIT | Audit modificari |
+| CCCTIPDOCREG | Tipuri documente |
+| CCCDCZCONTRACT | Istoric decizii |
+| CCCACTEADITIONALE | Istoric acte aditionale |
+
+---
+
+## Redist necesar pe client
+
+1. **.NET Framework 4.7.2** (inclus în Windows 10 1803+)
+2. **VC++ Redistributable 2015-2022 x86** (pentru PdfiumViewer)
+3. **pdfium.dll** — copiat lângă plugin
+4. **Microsoft Word** (2013+) — pentru generarea PDF prin Word Interop
+
+---
+
+## Fisiere de configurare runtime
+
+| Fisier | Locatie | Scop |
+|---|---|---|
+| `clauze_act_aditional.json` | `%TemplateDocsPath%` | Lista clauze act aditional, editabila din UI |
+| Template-uri `.docx` | `%TemplateDocsPath%` | Template-uri Word per tip document |

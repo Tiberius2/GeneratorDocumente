@@ -20,10 +20,10 @@ namespace ActAditionalPlugin.UI
         private void Build()
         {
             int y = 0;
-            var pnlDec = AddSectiune("DATE DECIZIE", ref y, 66);
+            var pnlDec = AddSectiune("DATE DECIZIE", ref y, 78);
             AddRandDecizie(pnlDec, 8);
 
-            var pnlCer = AddSectiune("DATE CERERE & ÎNCETARE", ref y, 118);
+            var pnlCer = AddSectiune("DATE CERERE SI ÎNCETARE", ref y, 132);
             AddRandCerere(pnlCer, 8);
 
             _dtpIncetare = MakeDtp();
@@ -38,6 +38,8 @@ namespace ActAditionalPlugin.UI
             var tbl2 = AddRow(pnlCer, 56, new[] { 35, 65 });
             AddLabeledInput(tbl2, 0, "Data încetare", _dtpIncetare);
             AddLabeledInput(tbl2, 1, "Articol demisie", _cmbArticol);
+
+            AddMentiuniSection(ref y);
         }
 
         protected override bool ValidateForm() => ValidateCerere();
@@ -67,13 +69,15 @@ namespace ActAditionalPlugin.UI
         private void Build()
         {
             int y = 0;
-            var pnlDec = AddSectiune("DATE DECIZIE", ref y, 66);
+            var pnlDec = AddSectiune("DATE DECIZIE", ref y, 78);
             AddRandDecizie(pnlDec, 8);
 
-            var pnlDate = AddSectiune("DATA ÎNCETARE", ref y, 66);
+            var pnlDate = AddSectiune("DATA ÎNCETARE", ref y, 78);
             _dtpIncetare = MakeDtp();
             var tbl = AddRow(pnlDate, 8, new[] { 40, 60 });
             AddLabeledInput(tbl, 0, "Data încetare contract", _dtpIncetare);
+
+            AddMentiuniSection(ref y);
         }
 
         protected override bool ValidateForm() => ValidateDecizie();
@@ -115,11 +119,11 @@ namespace ActAditionalPlugin.UI
             int y = 0;
 
             // DATE DECIZIE
-            var pnlDec = AddSectiune("DATE DECIZIE", ref y, 66);
+            var pnlDec = AddSectiune("DATE DECIZIE", ref y, 78);
             AddRandDecizie(pnlDec, 8);
 
             // CERCETARE
-            var pnlCerc = AddSectiune("CERCETARE DISCIPLINARĂ", ref y, 118);
+            var pnlCerc = AddSectiune("CERCETARE DISCIPLINARĂ", ref y, 132);
             _dtpDataPV = MakeDtp();
             _dtpDataPVEnd = MakeDtp();
             _txtNrPV = MakeInput("ex. 298");
@@ -128,7 +132,7 @@ namespace ActAditionalPlugin.UI
 
             var tbl1 = AddRow(pnlCerc, 8, new[] { 33, 33, 34 });
             AddLabeledInput(tbl1, 0, "Data start cercetare", _dtpDataPV);
-            AddLabeledInput(tbl1, 1, "Data end cercetare", _dtpDataPVEnd);
+            AddLabeledInput(tbl1, 1, "Data sfarsit cercetare", _dtpDataPVEnd);
             AddLabeledInput(tbl1, 2, "Nr. proces verbal", _txtNrPV, required: true);
 
             var tbl2 = AddRow(pnlCerc, 8, new[] { 65, 35 });
@@ -140,7 +144,7 @@ namespace ActAditionalPlugin.UI
             {
                 Text = "MOTIVE ȘI CIRCUMSTANȚE",
                 Font = FSectiune,
-                ForeColor = Albastru,
+                ForeColor = ButtonPalettes.Primary.Foreground,
                 AutoSize = true,
                 Left = 0,
                 Top = y
@@ -211,12 +215,14 @@ namespace ActAditionalPlugin.UI
             };
 
             // INTOCMIT
-            var pnlInt = AddSectiune("ÎNTOCMIT DE", ref y, 66);
+            var pnlInt = AddSectiune("ÎNTOCMIT DE", ref y, 78);
             _txtNumeIntocmit = MakeInput("ex. Marin Iulia-Alina");
             _txtFunctieIntocmit = MakeInput("ex. Specialist Resurse Umane");
             var tblI = AddRow(pnlInt, 8, new[] { 50, 50 });
             AddLabeledInput(tblI, 0, "Nume", _txtNumeIntocmit);
             AddLabeledInput(tblI, 1, "Funcție", _txtFunctieIntocmit);
+
+            AddMentiuniSection(ref y);
         }
 
         protected override bool ValidateForm()
@@ -243,6 +249,55 @@ namespace ActAditionalPlugin.UI
             _m.ConsecinteAbateri = _txtConsec != null ? _txtConsec.Text.Trim() : string.Empty;
             _m.NumeIntocmit = GetText(_txtNumeIntocmit);
             _m.FunctieIntocmit = GetText(_txtFunctieIntocmit);
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  INCETARE CIM — perioada de proba
+    // ══════════════════════════════════════════════════════════
+    public class IncetarePerioadaProbaForm : DecizieFormBase
+    {
+        private readonly IncetarePerioadaProbaModel _m;
+        private DateTimePicker _dtpIncetare, _dtpNotificare;
+        private TextBox _txtNrNotificare;
+
+        public IncetarePerioadaProbaForm(IncetarePerioadaProbaModel model)
+            : base(model, "Încetare CIM — perioadă de probă") { _m = model; Build(); }
+
+        private void Build()
+        {
+            int y = 0;
+            var pnlDec = AddSectiune("DATE DECIZIE", ref y, 78);
+            AddRandDecizie(pnlDec, 8);
+
+            var pnlNot = AddSectiune("DATE NOTIFICARE", ref y, 132);
+            _dtpIncetare = MakeDtp();
+            _dtpNotificare = MakeDtp();
+            _txtNrNotificare = MakeInput("ex. 42");
+
+            var tbl = AddRow(pnlNot, 8, new[] { 35, 30, 35 });
+            AddLabeledInput(tbl, 0, "Data încetare contract", _dtpIncetare);
+            AddLabeledInput(tbl, 1, "Nr. notificare", _txtNrNotificare, required: true);
+            AddLabeledInput(tbl, 2, "Data notificare", _dtpNotificare);
+
+            AddMentiuniSection(ref y);
+        }
+
+        protected override bool ValidateForm()
+        {
+            if (!ValidateDecizie()) return false;
+            if (!RequireText(_txtNrNotificare, "Nr. notificare")) return false;
+            return true;
+        }
+
+        protected override string GetTemplatePath() => PluginConfig.GetTemplatePath(TipDocument.IncetarePerioadaProba);
+
+        protected override void PopulateModel()
+        {
+            PopulateDecizie(_m);
+            _m.DataIncetare = GetDate(_dtpIncetare);
+            _m.NrNotificare = GetText(_txtNrNotificare);
+            _m.DataNotificare = GetDate(_dtpNotificare);
         }
     }
 }

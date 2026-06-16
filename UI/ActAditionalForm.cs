@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Linq;
 using System.Windows.Forms;
 using ActAditionalPlugin.Models;
+using ActAditionalPlugin.Services;
 
 namespace ActAditionalPlugin.UI
 {
@@ -14,12 +16,23 @@ namespace ActAditionalPlugin.UI
         private DateTimePicker _dtpDataVig;
         private Panel _pnlModificari;
         private readonly List<PunctModificareControl> _puncte = new List<PunctModificareControl>();
+        private List<ClauzeActAditional> _clauze;
 
         public ActAditionalForm(ActAditionalModel model)
             : base(model, "Act Adițional — CIM")
         {
             _aa = model;
+            _clauze = LoadClauzeActive();
             BuildBody();
+        }
+
+        private static List<ClauzeActAditional> LoadClauzeActive()
+        {
+            var cfg = ClauzeService.Load();
+            var tip = cfg.GetTipSelectat();
+            return tip != null
+                ? tip.Clauze.Where(c => c.Activ).ToList()
+                : new List<ClauzeActAditional>();
         }
 
         private void BuildBody()
@@ -27,14 +40,22 @@ namespace ActAditionalPlugin.UI
             int y = 0;
 
             // ── DATE DOCUMENT ─────────────────────────────────
-            var pnlDoc = AddSectiune("DATE DOCUMENT", ref y, 66);
-            _txtCodInregistrare = MakeInput("ex. 26001/1");
+            var pnlDoc = AddSectiune("DATE DOCUMENT", ref y, 78);
+            _txtCodInregistrare = MakeReadonly();
+            CodInregistrareField = _txtCodInregistrare;
+            if (!string.IsNullOrEmpty(_model.CodInregistrare))
+                _txtCodInregistrare.Text = _model.CodInregistrare;
+            CodInregistrareField = _txtCodInregistrare;
+            if (!string.IsNullOrEmpty(_model.CodInregistrare))
+                _txtCodInregistrare.Text = _model.CodInregistrare;
             _dtpDataAct = MakeDtp();
             _dtpDataVig = MakeDtp();
             var tbl = AddRow(pnlDoc, 8, new[] { 25, 37, 38 });
             AddLabeledInput(tbl, 0, "Cod înregistrare", _txtCodInregistrare, required: true);
             AddLabeledInput(tbl, 1, "Data actului", _dtpDataAct);
             AddLabeledInput(tbl, 2, "Intrare în vigoare", _dtpDataVig);
+
+            AddMentiuniSection(ref y);
 
             // ── MODIFICARI ────────────────────────────────────
             // Header modificari
@@ -55,7 +76,7 @@ namespace ActAditionalPlugin.UI
             {
                 Text = "MODIFICĂRI — Art. I",
                 Font = FSectiune,
-                ForeColor = Albastru,
+                ForeColor = Theme.Accent,
                 AutoSize = true,
                 Location = new Point(0, 8)
             });
@@ -65,19 +86,49 @@ namespace ActAditionalPlugin.UI
                 Text = "+ Adaugă modificare",
                 Height = 28,
                 Width = 180,
-                FlatStyle = FlatStyle.Flat,
-                BackColor = Albastru,
-                ForeColor = Color.White,
                 Font = new Font("Segoe UI", 9f, FontStyle.Bold),
-                Cursor = Cursors.Hand,
                 Top = 3,
                 Anchor = AnchorStyles.Right | AnchorStyles.Top
             };
+            ButtonPalettes.Primary.ApplyTo(btnAdd);
             btnAdd.FlatAppearance.BorderSize = 0;
             btnAdd.Click += (s, e) => AddPunct();
+
+            var btnEditorClauze = new Button
+            {
+                Text = "⚙ Editează clauze",
+                Height = 28,
+                Width = 150,
+                Font = new Font("Segoe UI", 9f, FontStyle.Bold),
+                Top = 3,
+                Anchor = AnchorStyles.Right | AnchorStyles.Top,
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(245, 211, 137),   // amber
+                ForeColor = Color.FromArgb(60, 40, 10),
+                Cursor = Cursors.Hand
+            };
+            btnEditorClauze.FlatAppearance.BorderSize = 2;
+            btnEditorClauze.FlatAppearance.BorderColor = Color.FromArgb(240, 173, 78);
+            btnEditorClauze.Click += (s, e) =>
+            {
+                using (var dlg = new ClauzeEditorDialog())
+                {
+                    dlg.ShowDialog(this);
+                    // Reincarcam clauze indiferent de rezultat
+                    _clauze = LoadClauzeActive();
+                    foreach (var p in _puncte) p.SetClauze(_clauze);
+                }
+            };
+
             pnlModHeader.Controls.Add(btnAdd);
-            pnlModHeader.Resize += (s, e) => btnAdd.Left = pnlModHeader.Width - btnAdd.Width;
+            pnlModHeader.Controls.Add(btnEditorClauze);
+            pnlModHeader.Resize += (s, e) =>
+            {
+                btnAdd.Left = pnlModHeader.Width - btnAdd.Width;
+                btnEditorClauze.Left = btnAdd.Left - btnEditorClauze.Width - 8;
+            };
             btnAdd.Left = pnlModHeader.Width - btnAdd.Width;
+            btnEditorClauze.Left = btnAdd.Left - btnEditorClauze.Width - 8;
 
             y += 42;
 
@@ -103,7 +154,7 @@ namespace ActAditionalPlugin.UI
 
         private void AddPunct()
         {
-            var c = new PunctModificareControl(_puncte.Count + 1);
+            var c = new PunctModificareControl(_puncte.Count + 1, _clauze);
             c.OnDelete = () => { _puncte.Remove(c); _pnlModificari.Controls.Remove(c); Renumber(); RelayoutPuncte(); };
             _puncte.Add(c);
             _pnlModificari.Controls.Add(c);

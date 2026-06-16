@@ -19,7 +19,6 @@ namespace ActAditionalPlugin.UI
         private TextBox _txtCod;
         private DateTimePicker _dtpData;
         private ComboBox _cmbTipPredare;
-        private TextBox _txtMentiuni;
         private Panel _pnlItems;
         private readonly System.Collections.Generic.List<EchipamentItemControl> _items
             = new System.Collections.Generic.List<EchipamentItemControl>();
@@ -37,9 +36,18 @@ namespace ActAditionalPlugin.UI
         {
             int y = 0;
 
-            var pnlDoc = AddSectiune("DATE DOCUMENT", ref y, 66);
-            _txtCod = MakeInput("ex. 26001/1");
+            var pnlDoc = AddSectiune("DATE DOCUMENT", ref y, 78);
+            _txtCod = MakeReadonly();
+            CodInregistrareField = _txtCod;
+            if (!string.IsNullOrEmpty(((PvModelBase)_m).CodInregistrare))
+                _txtCod.Text = ((PvModelBase)_m).CodInregistrare;
             _dtpData = MakeDtp();
+            _dtpData.ValueChanged += (s, e) =>
+            {
+                var svc = ActAditionalPlugin.Services.RegistraturaService.Instance;
+                if (svc != null && CodInregistrareField != null)
+                    CodInregistrareField.Text = svc.CalculateCod(_dtpData.Value.Date);
+            };
             _cmbTipPredare = MakeTipPredareCombo();
             var tbl1 = AddRow(pnlDoc, new[] { 30, 30, 40 });
             AddLabeledInput(tbl1, 0, "Cod înregistrare", _txtCod, required: true);
@@ -63,7 +71,7 @@ namespace ActAditionalPlugin.UI
             {
                 Text = _sectionLabel,
                 Font = FSectiune,
-                ForeColor = Albastru,
+                ForeColor = Theme.Accent,
                 AutoSize = true,
                 Location = new Point(0, 8)
             });
@@ -73,16 +81,14 @@ namespace ActAditionalPlugin.UI
                 Text = "+ Adaugă echipament",
                 Height = 28,
                 Width = 190,
-                FlatStyle = FlatStyle.Flat,
-                BackColor = Albastru,
-                ForeColor = Color.White,
                 Font = new Font("Segoe UI", 9f, FontStyle.Bold),
-                Cursor = Cursors.Hand,
                 Top = 3,
                 Anchor = AnchorStyles.Right | AnchorStyles.Top
             };
+            ButtonPalettes.Primary.ApplyTo(btnAdd);
             btnAdd.FlatAppearance.BorderSize = 0;
             btnAdd.Click += (s, e) => AddItem();
+
             pnlHeader.Controls.Add(btnAdd);
             pnlHeader.Resize += (s, e) => btnAdd.Left = pnlHeader.Width - btnAdd.Width;
             btnAdd.Left = pnlHeader.Width - btnAdd.Width;
@@ -106,7 +112,7 @@ namespace ActAditionalPlugin.UI
             };
             y += 268;
 
-            var pnlMent = AddSectiune("MENȚIUNI", ref y, 90);
+            var pnlMent = AddSectiune("MENȚIUNI", ref y, 102);
             pnlMent.Controls.Add(new Label
             {
                 Text = "Mențiuni suplimentare (opțional):",
@@ -116,7 +122,7 @@ namespace ActAditionalPlugin.UI
                 Margin = new Padding(0, 4, 0, 2)
             });
             _txtMentiuni = MakeMultiline(52);
-            _txtMentiuni.Dock = DockStyle.Top;
+            _txtMentiuni.Width = Math.Max(pnlMent.ClientSize.Width - pnlMent.Padding.Horizontal, 300);
             pnlMent.Controls.Add(_txtMentiuni);
             pnlMent.Resize += (s, e) => _txtMentiuni.Width = pnlMent.ClientSize.Width - pnlMent.Padding.Horizontal;
         }
@@ -158,12 +164,13 @@ namespace ActAditionalPlugin.UI
             _m.CodInregistrare = GetText(_txtCod);
             _m.DataPV = GetDate(_dtpData);
             _m.TipPredare = GetTipPredare(_cmbTipPredare);
-            _m.Mentiuni = _txtMentiuni.Text.Trim();
             _m.Bunuri = new System.Collections.Generic.List<ActAditionalPlugin.Models.PvBunItem>();
             foreach (var item in _items) { var bun = item.GetBunItem(); if (bun != null) _m.Bunuri.Add(bun); }
         }
 
         protected override string GetTemplatePath() => _m.GetTemplatePath();
+        protected override DateTime GetRegistraturaDate()
+            => _dtpData != null ? _dtpData.Value.Date : base.GetRegistraturaDate();
     }
 
     // ══════════════════════════════════════════════════════════
@@ -203,16 +210,25 @@ namespace ActAditionalPlugin.UI
         {
             int y = 0;
 
-            var pnlDoc = AddSectiune("DATE DOCUMENT", ref y, 66);
-            _txtCod = MakeInput("ex. 26001/1");
+            var pnlDoc = AddSectiune("DATE DOCUMENT", ref y, 78);
+            _txtCod = MakeReadonly();
+            CodInregistrareField = _txtCod;
+            if (!string.IsNullOrEmpty(_m.CodInregistrare))
+                _txtCod.Text = _m.CodInregistrare;
             _dtpData = MakeDtp();
+            _dtpData.ValueChanged += (s, e) =>
+            {
+                var svc = ActAditionalPlugin.Services.RegistraturaService.Instance;
+                if (svc != null && CodInregistrareField != null)
+                    CodInregistrareField.Text = svc.CalculateCod(_dtpData.Value.Date);
+            };
             _cmbTipPredare = MakeTipPredareCombo();
             var tbl1 = AddRow(pnlDoc, new[] { 30, 30, 40 });
             AddLabeledInput(tbl1, 0, "Cod înregistrare", _txtCod, required: true);
             AddLabeledInput(tbl1, 1, "Data PV", _dtpData);
             AddLabeledInput(tbl1, 2, "Tip predare-primire", _cmbTipPredare);
 
-            var pnlPred2 = AddSectiune("AL DOILEA PREDATOR (opțional) — Art. 2", ref y, 176);
+            var pnlPred2 = AddSectiune("AL DOILEA PREDATOR (opțional) — Art. 2", ref y, 190);
             _txtNumePredator2 = MakeInput("ex. CHIRILA DUMITRU");
             _txtFunctiePredator2 = MakeInput("ex. DIRECTOR VANZARI");
             var tblP1 = AddRow(pnlPred2, new[] { 50, 50 });
@@ -231,7 +247,7 @@ namespace ActAditionalPlugin.UI
             var tblP3 = AddRow(pnlPred2, new[] { 100 });
             AddLabeledInput(tblP3, 0, "Domiciliu predator 2", _txtDomiciliuPredator2);
 
-            var pnlPrim = AddSectiune("DATE SUPLIMENTARE PRIMITOR — Art. 3", ref y, 66);
+            var pnlPrim = AddSectiune("DATE SUPLIMENTARE PRIMITOR — Art. 3", ref y, 78);
             _txtCISeria = MakeInput("ex. XT");
             _txtCINr = MakeInput("ex. 929646");
             _txtDomiciliu = MakeInput("ex. BOTOSANI, Str. ..., Nr. ...");
@@ -246,7 +262,7 @@ namespace ActAditionalPlugin.UI
             AddLabeledInput(tbl3, 1, "CI Nr.", _txtCINr);
             AddLabeledInput(tbl3, 2, "Domiciliu", _txtDomiciliu);
 
-            var pnlVeh = AddSectiune("DATE AUTOVEHICUL", ref y, 120);
+            var pnlVeh = AddSectiune("DATE AUTOVEHICUL", ref y, 134);
             _txtMarca = MakeInput("ex. IVECO");
             _txtNrInmatr = MakeInput("ex. BT 30 ESP");
             _txtSerieSasiu = MakeInput("ex. ZCFCC35A305232370");
@@ -260,7 +276,7 @@ namespace ActAditionalPlugin.UI
             AddLabeledInput(tblV2, 0, "An fabricație", _txtAnFab);
             AddLabeledInput(tblV2, 1, "Kilometri", _txtKm);
 
-            var pnlStare = AddSectiune("STARE TEHNICĂ", ref y, 120);
+            var pnlStare = AddSectiune("STARE TEHNICĂ", ref y, 134);
             _txtStareFunct = MakeInput("ex. buna");
             _txtAvarii = MakeInput("ex. -");
             _txtAnvFata = MakeInput("ex. 225/65/R16");
@@ -274,7 +290,7 @@ namespace ActAditionalPlugin.UI
             AddLabeledInput(tblS2, 1, "Anvelope spate", _txtAnvSpate);
             AddLabeledInput(tblS2, 2, "Uzură anvelope (%)", _txtUzura);
 
-            var pnlDot = AddSectiune("DOTĂRI (DA/NU)", ref y, 120);
+            var pnlDot = AddSectiune("DOTĂRI (DA/NU)", ref y, 134);
             _cmbTrusa = MakeDaNu(); _cmbExtinctor = MakeDaNu();
             _cmbTriunghi = MakeDaNu(); _cmbCric = MakeDaNu();
             var tblD1 = AddRow(pnlDot, new[] { 25, 25, 25, 25 });
@@ -292,12 +308,14 @@ namespace ActAditionalPlugin.UI
             AddLabeledInput(tblD2, 2, "Roată rezervă (DA/NU)", _cmbRoata);
             AddLabeledInput(tblD2, 3, "Uzură roată rezervă (%)", _txtUzuraRoata);
 
-            var pnlDocs = AddSectiune("DOCUMENTE VEHICUL (DA/NU)", ref y, 66);
+            var pnlDocs = AddSectiune("DOCUMENTE VEHICUL (DA/NU)", ref y, 78);
             _cmbCertif = MakeDaNu(); _cmbRCA = MakeDaNu(); _cmbRovinieta = MakeDaNu();
             var tblDocs = AddRow(pnlDocs, new[] { 33, 33, 34 });
             AddLabeledInput(tblDocs, 0, "Certificat înmatriculare", _cmbCertif);
             AddLabeledInput(tblDocs, 1, "Asigurare RCA", _cmbRCA);
             AddLabeledInput(tblDocs, 2, "Rovinieta", _cmbRovinieta);
+
+            AddMentiuniSection(ref y);
         }
 
         private static ComboBox MakeDaNu()
@@ -361,5 +379,7 @@ namespace ActAditionalPlugin.UI
         }
 
         protected override string GetTemplatePath() => PluginConfig.GetTemplatePath(TipPV.Autovehicul);
+        protected override DateTime GetRegistraturaDate()
+            => _dtpData != null ? _dtpData.Value.Date : base.GetRegistraturaDate();
     }
 }

@@ -3,20 +3,18 @@ using System.Drawing;
 using System.IO;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
+using ActAditionalPlugin.Models;
 using ActAditionalPlugin.Services;
 
 namespace ActAditionalPlugin.UI
 {
-    /// <summary>
-    /// Infrastructura UI comuna tuturor formularelor (documente si PV).
-    /// Tema, shell (titlu/body/footer), layout helpers, PDF flow.
-    /// </summary>
     public abstract class FormBase : Form
     {
         // ── Tema ──────────────────────────────────────────────
-        protected static readonly Color Albastru = Color.FromArgb(63, 129, 198);
-        protected static readonly Color AlbastruPal = Color.FromArgb(235, 241, 251);
-        protected static readonly Color AlbastruBorder = Color.FromArgb(180, 205, 235);
+        protected readonly DocumentTheme Theme;
+        protected string _codGenerat = string.Empty;
+        protected string _titluDocGenerat = string.Empty;
+
         protected static readonly Color TextPrincipal = Color.FromArgb(25, 35, 55);
         protected static readonly Color TextSecundar = Color.FromArgb(80, 100, 130);
         protected static readonly Color FundalForm = Color.FromArgb(242, 245, 250);
@@ -26,8 +24,16 @@ namespace ActAditionalPlugin.UI
 
         protected Panel PnlBody { get; private set; }
 
-        protected FormBase(string titlu)
+        /// <summary>
+        /// Campul de cod inregistrare din formular (setat de subclasa in BuildContent).
+        /// FormBase il foloseste pentru a actualiza afisajul dupa recalculul codului.
+        /// </summary>
+        protected TextBox CodInregistrareField { get; set; }
+        protected TextBox _txtMentiuni;
+
+        protected FormBase(string titlu, DocumentTheme theme)
         {
+            Theme = theme;
             Text = titlu;
             Size = new Size(860, 680);
             MinimumSize = new Size(720, 520);
@@ -38,10 +44,10 @@ namespace ActAditionalPlugin.UI
             BuildShell(titlu);
         }
 
-        // ── Shell comun ───────────────────────────────────────
+        // ── Shell ─────────────────────────────────────────────
         private void BuildShell(string titlu)
         {
-            var pnlTitlu = new Panel { Dock = DockStyle.Top, Height = 50, BackColor = Albastru };
+            var pnlTitlu = new Panel { Dock = DockStyle.Top, Height = 50, BackColor = Theme.Accent };
             pnlTitlu.Controls.Add(new Label
             {
                 Text = titlu,
@@ -62,40 +68,30 @@ namespace ActAditionalPlugin.UI
             var pnlFooter = new Panel { Dock = DockStyle.Bottom, Height = 56, BackColor = Color.White };
             pnlFooter.Paint += (s, e) =>
             {
-                using (var p = new Pen(AlbastruBorder))
+                using (var p = new Pen(Theme.AccentBorder))
                     e.Graphics.DrawLine(p, 0, 0, pnlFooter.Width, 0);
             };
 
+            // Buton Genereaza PDF
             var btnGen = new Button
             {
-                Text = "Generează PDF",
-                Size = new Size(160, 36),
-                FlatStyle = FlatStyle.Flat,
-                BackColor = Albastru,
+                Text = "▶ Previzualizeaza si Genereaza ◀",
+                Size = new Size(252, 40),
+                FlatStyle = FlatStyle.Popup,
+                BackColor = Theme.Accent,
                 ForeColor = Color.White,
                 Font = new Font("Segoe UI", 10.5f, FontStyle.Bold),
                 Cursor = Cursors.Hand,
-                Top = 10,
-                Anchor = AnchorStyles.Right | AnchorStyles.Top
+                Top = 8,
+                Anchor = AnchorStyles.Right | AnchorStyles.Top,
+                AutoSize = false,
+                TextAlign = System.Drawing.ContentAlignment.MiddleCenter
             };
-            btnGen.FlatAppearance.BorderSize = 0;
-            btnGen.Click += BtnGenPdf_Click;
+            btnGen.MouseEnter += (s, e) => btnGen.BackColor = Theme.AccentDark;
+            btnGen.MouseLeave += (s, e) => btnGen.BackColor = Theme.Accent;
+            btnGen.Click += BtnPreview_Click;
 
-            var btnPreview = new Button
-            {
-                Text = "👁 Previzualizează",
-                Size = new Size(170, 36),
-                FlatStyle = FlatStyle.Flat,
-                BackColor = Color.FromArgb(240, 242, 246),
-                ForeColor = Color.FromArgb(60, 80, 110),
-                Font = new Font("Segoe UI", 10f),
-                Cursor = Cursors.Hand,
-                Top = 10,
-                Anchor = AnchorStyles.Right | AnchorStyles.Top
-            };
-            btnPreview.FlatAppearance.BorderSize = 1;
-            btnPreview.FlatAppearance.BorderColor = Color.FromArgb(200, 210, 225);
-            btnPreview.Click += BtnPreview_Click;
+            // Buton Previzualizare — tematizat, iconica diferita
 
             var btnInapoi = new Button
             {
@@ -114,21 +110,19 @@ namespace ActAditionalPlugin.UI
             btnInapoi.FlatAppearance.BorderColor = Color.FromArgb(200, 210, 225);
             btnInapoi.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
 
-            pnlFooter.Controls.AddRange(new Control[] { btnGen, btnPreview, btnInapoi });
+            pnlFooter.Controls.AddRange(new Control[] { btnGen, btnInapoi });
             pnlFooter.Resize += (s, e) =>
             {
                 btnGen.Left = pnlFooter.Width - btnGen.Width - 18;
-                btnPreview.Left = btnGen.Left - btnPreview.Width - 8;
             };
-            btnGen.Left = 680; btnPreview.Left = 502;
+            btnGen.Left = 680;
 
             var pnlAngajat = BuildAngajatSection();
-
-            // Ordinea determina stiva DockStyle.Top: ultimul adaugat = sus
             Controls.Add(PnlBody);
             Controls.Add(pnlAngajat);
             Controls.Add(pnlTitlu);
             Controls.Add(pnlFooter);
+            Shown += (s, e) => { ActiveControl = null; };
         }
 
         // ── PDF flow ──────────────────────────────────────────
@@ -136,34 +130,50 @@ namespace ActAditionalPlugin.UI
         {
             if (!ValidateForm()) return;
             PopulateModel();
+            PopulateMentiuni();
+            if (!OnBeforeGenerate()) return;            // confirmare + inregistrare registratura
             string tpl = GetTemplatePath();
             if (!File.Exists(tpl)) { ShowError("Template-ul nu a fost găsit:\n" + tpl); return; }
             try
             {
                 string pdf = DoGenerateFinalPdf(tpl);
                 OnAfterGenerate();
-                System.Diagnostics.Process.Start(pdf);
+                DialogResult = DialogResult.OK;
+                Close();
             }
             catch (Exception ex) { ShowError("Eroare la generare PDF:\n" + ex.Message); }
+        }
+
+        private void ShowSuccessAndClose()
+        {
+            var data = ActAditionalPlugin.Services.RegistraturaService.Instance != null
+                ? ActAditionalPlugin.Services.RegistraturaService.Instance.GetLoginDate()
+                : System.DateTime.Today;
+            using (var dlg = new SuccessDialog(_titluDocGenerat, _codGenerat, data, Theme))
+                dlg.ShowDialog(this);
+            DialogResult = DialogResult.OK;
+            Close();
         }
 
         private void BtnPreview_Click(object sender, EventArgs e)
         {
             if (!ValidateForm()) return;
             PopulateModel();
+            PopulateMentiuni();
             string tpl = GetTemplatePath();
             if (!File.Exists(tpl)) { ShowError("Template-ul nu a fost găsit:\n" + tpl); return; }
             try
             {
                 string tempPdf = GenerateTempPdf(tpl);
-                using (var dlg = new PdfPreviewForm(tempPdf, deletePdfOnClose: true))
+                using (var dlg = new PdfPreviewForm(tempPdf, Theme, deletePdfOnClose: true))
                 {
                     dlg.ShowDialog(this);
                     if (dlg.UserConfirmed)
                     {
+                        if (!OnBeforeGenerate()) return;   // confirmare + inregistrare registratura
                         string pdf = DoGenerateFinalPdf(tpl);
                         OnAfterGenerate();
-                        System.Diagnostics.Process.Start(pdf);
+                        ShowSuccessAndClose();
                     }
                 }
             }
@@ -181,17 +191,14 @@ namespace ActAditionalPlugin.UI
                 FillDocxTemplate(tempDocx);
                 WordHelper.ConvertToPdf(tempDocx, tempPdf);
             }
-            finally
-            {
-                if (File.Exists(tempDocx)) File.Delete(tempDocx);
-            }
+            finally { if (File.Exists(tempDocx)) File.Delete(tempDocx); }
             return tempPdf;
         }
 
         private static void ShowError(string msg)
             => MessageBox.Show(msg, "Eroare", MessageBoxButtons.OK, MessageBoxIcon.Error);
 
-        // ── Abstract: implementate de subclase ─────────────────
+        // ── Abstract / Virtual ─────────────────────────────────
         protected abstract Panel BuildAngajatSection();
         protected abstract bool ValidateForm();
         protected abstract void PopulateModel();
@@ -200,20 +207,64 @@ namespace ActAditionalPlugin.UI
         protected abstract string DoGenerateFinalPdf(string templatePath);
         protected virtual void OnAfterGenerate() { }
 
+        /// <summary>
+        /// Apelat dupa PopulateModel(). Subclasele (DocumentFormBase, PvFormBase) scriu
+        /// continutul campului _txtMentiuni in proprietatea MentiuniDocument a modelului.
+        /// </summary>
+        protected virtual void PopulateMentiuni() { }
+
+        /// <summary>
+        /// Apelat inainte de generarea finala a PDF-ului.
+        /// Subclasele (DocumentFormBase, PvFormBase) afiseaza promptul de confirmare
+        /// si fac INSERT in Registratura. Returneaza false daca userul anuleaza.
+        /// </summary>
+        protected virtual bool OnBeforeGenerate() => true;
+
+        protected virtual DateTime GetRegistraturaDate()
+        {
+            var svc = ActAditionalPlugin.Services.RegistraturaService.Instance;
+            return svc != null ? svc.GetLoginDate() : DateTime.Today;
+        }
+
+        // ── Sectiune Mentiuni / Observatii ─────────────────────
+        protected Panel AddMentiuniSection(ref int y)
+        {
+            var pnl = AddSectiune("MENȚIUNI / OBSERVAȚII", ref y, 102);
+            _txtMentiuni = MakeMultiline(52);
+            _txtMentiuni.Width = Math.Max(pnl.ClientSize.Width - pnl.Padding.Horizontal, 300);
+            pnl.Controls.Add(_txtMentiuni);
+            return pnl;
+        }
+
         // ── Layout helpers ─────────────────────────────────────
         protected Panel AddSectiune(string titlu, ref int yOffset, int height)
         {
-            PnlBody.Controls.Add(new Label
+            // Header-band sectiune
+            var pnlHdr = new Panel
+            {
+                Left = 0,
+                Top = yOffset,
+                Height = 30,
+                BackColor = Theme.AccentPal,
+                Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top
+            };
+            pnlHdr.Paint += (s, e) =>
+                e.Graphics.FillRectangle(new SolidBrush(Theme.Accent), 0, 0, 4, pnlHdr.Height);
+            pnlHdr.Controls.Add(new Label
             {
                 Text = titlu,
-                Font = FSectiune,
-                ForeColor = Albastru,
+                Font = new Font("Segoe UI Semibold", 10f),
+                ForeColor = Theme.AccentDark,
                 AutoSize = true,
-                Left = 0,
-                Top = yOffset
+                Location = new Point(14, 6)
             });
-            yOffset += 22;
+            PnlBody.Controls.Add(pnlHdr);
+            PnlBody.Resize += (s, e) =>
+                pnlHdr.Width = PnlBody.ClientSize.Width - PnlBody.Padding.Horizontal;
+            pnlHdr.Width = Math.Max(PnlBody.ClientSize.Width - PnlBody.Padding.Horizontal, 400);
+            yOffset += 34;
 
+            // Continut sectiune
             var flow = new FlowLayoutPanel
             {
                 FlowDirection = FlowDirection.TopDown,
@@ -222,7 +273,7 @@ namespace ActAditionalPlugin.UI
                 Top = yOffset,
                 Height = height,
                 BackColor = Color.White,
-                Padding = new Padding(12, 6, 12, 6),
+                Padding = new Padding(12, 8, 12, 8),
                 AutoSize = false,
                 Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top
             };
@@ -235,7 +286,7 @@ namespace ActAditionalPlugin.UI
                     c.Width = flow.ClientSize.Width - flow.Padding.Horizontal;
             };
             flow.Width = Math.Max(PnlBody.ClientSize.Width - PnlBody.Padding.Horizontal, 400);
-            yOffset += height + 10;
+            yOffset += height + 14;
             return flow;
         }
 
@@ -250,14 +301,12 @@ namespace ActAditionalPlugin.UI
             return tbl;
         }
 
-        /// <param name="top">Ignorat — pastrat pentru compatibilitate cu subclasele existente.</param>
         protected TableLayoutPanel AddRow(Panel parent, int top, int[] colPercents)
             => AddRow(parent, colPercents);
 
         protected void AddLabeledInput(TableLayoutPanel tbl, int col, string label, Control ctrl, bool required = false)
             => AddCell(tbl, col, label, ctrl, required);
 
-        /// <summary>TLP cu DockStyle.Top pentru randurile din sectiunile de header (angajat).</summary>
         protected static TableLayoutPanel MakeRow(int[] percents)
         {
             var tbl = new TableLayoutPanel
@@ -278,14 +327,7 @@ namespace ActAditionalPlugin.UI
 
         // ── Factory controale ──────────────────────────────────
         protected static TextBox MakeReadonly()
-            => new TextBox
-            {
-                ReadOnly = true,
-                BackColor = Color.FromArgb(238, 242, 250),
-                ForeColor = TextSecundar,
-                Font = FInput,
-                BorderStyle = BorderStyle.FixedSingle
-            };
+            => new TextBox { ReadOnly = true, BackColor = Color.FromArgb(208, 213, 226), ForeColor = Color.FromArgb(60, 75, 100), Font = FInput, BorderStyle = BorderStyle.FixedSingle };
 
         protected static TextBox MakeInput(string placeholder = "")
         {
@@ -295,16 +337,7 @@ namespace ActAditionalPlugin.UI
         }
 
         protected static TextBox MakeMultiline(int height = 60)
-            => new TextBox
-            {
-                Multiline = true,
-                Height = height,
-                BackColor = Color.White,
-                ForeColor = TextPrincipal,
-                Font = FInput,
-                BorderStyle = BorderStyle.FixedSingle,
-                ScrollBars = ScrollBars.Vertical
-            };
+            => new TextBox { Multiline = true, Height = height, BackColor = Color.White, ForeColor = TextPrincipal, Font = FInput, BorderStyle = BorderStyle.FixedSingle, ScrollBars = ScrollBars.Vertical };
 
         protected static DateTimePicker MakeDtp()
             => new DateTimePicker { Format = DateTimePickerFormat.Short, Value = DateTime.Today, Font = FInput, Height = 26 };
@@ -312,36 +345,25 @@ namespace ActAditionalPlugin.UI
         protected static ComboBox MakeCombo()
             => new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Font = FInput, BackColor = Color.White, ForeColor = TextPrincipal };
 
-        protected static Label MakeSectionHeader(string text, int top)
-            => new Label { Text = text, Font = FSectiune, ForeColor = Albastru, AutoSize = true, Location = new Point(0, top) };
+        protected Label MakeSectionHeader(string text, int top)
+            => new Label { Text = text, Font = FSectiune, ForeColor = Theme.Accent, AutoSize = true, Location = new Point(0, top) };
 
-        // ── Helpers date ───────────────────────────────────────
         protected static void SetPlaceholder(TextBox tb, string ph)
         {
             tb.Text = ph; tb.ForeColor = Color.Gray;
             tb.Font = new Font(FInput, FontStyle.Regular);
-            tb.GotFocus += (s, e) =>
-            {
-                if (tb.ForeColor == Color.Gray) { tb.Text = string.Empty; tb.ForeColor = TextPrincipal; tb.Font = FInput; }
-            };
-            tb.LostFocus += (s, e) =>
-            {
-                if (string.IsNullOrWhiteSpace(tb.Text)) { tb.Text = ph; tb.ForeColor = Color.Gray; tb.Font = new Font(FInput, FontStyle.Regular); }
-            };
+            tb.GotFocus += (s, e) => { if (tb.ForeColor == Color.Gray) { tb.Text = string.Empty; tb.ForeColor = TextPrincipal; tb.Font = FInput; } };
+            tb.LostFocus += (s, e) => { if (string.IsNullOrWhiteSpace(tb.Text)) { tb.Text = ph; tb.ForeColor = Color.Gray; tb.Font = new Font(FInput, FontStyle.Regular); } };
         }
 
-        protected static string GetText(TextBox tb)
-            => tb.ForeColor == Color.Gray ? string.Empty : tb.Text.Trim();
-
+        protected static string GetText(TextBox tb) => tb.ForeColor == Color.Gray ? string.Empty : tb.Text.Trim();
         protected static DateTime GetDate(DateTimePicker dtp) => dtp.Value.Date;
 
-        // ── Validare ───────────────────────────────────────────
         protected static bool RequireText(TextBox tb, string name)
         {
             if (string.IsNullOrWhiteSpace(GetText(tb)))
             {
-                MessageBox.Show(string.Format("Câmpul \"{0}\" este obligatoriu.", name),
-                    "Validare", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(string.Format("Câmpul \"{0}\" este obligatoriu.", name), "Validare", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 tb.Focus(); return false;
             }
             return true;
@@ -354,21 +376,18 @@ namespace ActAditionalPlugin.UI
             var m = Regex.Match(val, @"^(\d{2})(\d{3})/(\d+)$");
             if (!m.Success)
             {
-                MessageBox.Show("Codul de înregistrare trebuie să fie în formatul YYddd/#nr\nExemplu: 26001/1",
-                    "Format invalid", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("Codul de înregistrare trebuie să fie în formatul YYddd/#nr\nExemplu: 26001/1", "Format invalid", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 tb.Focus(); return false;
             }
             int zi = int.Parse(m.Groups[2].Value);
             if (zi < 1 || zi > 366)
             {
-                MessageBox.Show("Ziua din an (ddd) trebuie să fie între 001 și 366.",
-                    "Format invalid", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("Ziua din an (ddd) trebuie să fie între 001 și 366.", "Format invalid", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 tb.Focus(); return false;
             }
             return true;
         }
 
-        // ── Helpers pictura ────────────────────────────────────
         protected static void PaintBottomLine(object sender, PaintEventArgs e)
         {
             var p = (Panel)sender;
@@ -383,18 +402,9 @@ namespace ActAditionalPlugin.UI
                 e.Graphics.DrawRectangle(pen, 0, 0, p.Width - 1, p.Height - 1);
         }
 
-        // ── Helper privat ──────────────────────────────────────
         private static TableLayoutPanel MakeTbl(int cols, int[] percents)
         {
-            var tbl = new TableLayoutPanel
-            {
-                RowCount = 1,
-                ColumnCount = cols,
-                Height = 54,
-                BackColor = Color.Transparent,
-                Padding = new Padding(0),
-                Margin = new Padding(0)
-            };
+            var tbl = new TableLayoutPanel { RowCount = 1, ColumnCount = cols, Height = 54, BackColor = Color.Transparent, Padding = new Padding(0), Margin = new Padding(0) };
             tbl.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             for (int i = 0; i < cols; i++)
                 tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, percents[i]));
@@ -404,26 +414,19 @@ namespace ActAditionalPlugin.UI
         private static void AddCell(TableLayoutPanel tbl, int col, string labelText, Control ctrl, bool required = false)
         {
             var cell = new Panel { BackColor = Color.Transparent, Dock = DockStyle.Fill, Padding = new Padding(0, 0, 8, 0) };
-            var pnlLbl = new Panel { Dock = DockStyle.Top, Height = 18, BackColor = Color.Transparent };
+            var pnlLbl = new Panel { Dock = DockStyle.Top, Height = 22, BackColor = Color.Transparent };
             var lbl = new Label
             {
                 Text = labelText,
-                Font = new Font("Segoe UI", 9f),
-                ForeColor = Color.FromArgb(80, 100, 130),
+                Font = new Font("Segoe UI Semibold", 10f),
+                ForeColor = Color.FromArgb(55, 75, 105),
                 AutoSize = true,
                 Location = new Point(0, 2)
             };
             pnlLbl.Controls.Add(lbl);
             if (required)
             {
-                var star = new Label
-                {
-                    Text = " *",
-                    Font = new Font("Segoe UI", 8f, FontStyle.Bold),
-                    ForeColor = Color.FromArgb(200, 50, 40),
-                    AutoSize = true,
-                    Location = new Point(lbl.PreferredWidth, 2)
-                };
+                var star = new Label { Text = " *", Font = new Font("Segoe UI", 8f, FontStyle.Bold), ForeColor = Color.FromArgb(200, 50, 40), AutoSize = true, Location = new Point(lbl.PreferredWidth, 2) };
                 lbl.SizeChanged += (s, e) => star.Left = lbl.Right;
                 pnlLbl.Controls.Add(star);
             }

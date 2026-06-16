@@ -206,6 +206,8 @@ namespace ActAditionalPlugin.Services
                     AddIncetareExpirare(map, (IncetareExpirareModel)model); break;
                 case TipDocument.IncetareDisciplinar:
                     AddIncetareDisciplinar(map, (IncetareDisciplinarModel)model); break;
+                case TipDocument.IncetarePerioadaProba:
+                    AddIncetarePerioadaProba(map, (IncetarePerioadaProbaModel)model); break;
             }
 
             return map;
@@ -233,6 +235,7 @@ namespace ActAditionalPlugin.Services
                 { "{{WebsiteCompanie}}",     m.WebsiteCompanie ?? string.Empty },
                 { "{{ArticolCompartiment}}", _artCompartiment ?? string.Empty },
                 { "{{ArticolContestatie}}",  _artContestatie ?? string.Empty },
+                { "{{MentiuniDocument}}",    m.MentiuniDocument ?? string.Empty },
             };
         }
 
@@ -263,8 +266,11 @@ namespace ActAditionalPlugin.Services
         {
             AddCerere(map, m);
             map["{{DataStartSuspendare}}"] = m.DataStartSuspendare.ToString("dd.MM.yyyy");
+            map["{{DataEndSuspendare}}"] = m.DataEndSuspendare != DateTime.MinValue
+                ? m.DataEndSuspendare.ToString("dd.MM.yyyy") : string.Empty;
             map["{{PerioadaSuspendare}}"] = m.PerioadaSuspendare ?? string.Empty;
             map["{{NumeCopil}}"] = m.NumeCopil ?? string.Empty;
+            map["{{CNPCopil}}"] = m.CNPCopil ?? string.Empty;
             map["{{SerieCertificat}}"] = m.SerieCertificat ?? string.Empty;
             map["{{NrCertificat}}"] = m.NrCertificat ?? string.Empty;
         }
@@ -273,9 +279,11 @@ namespace ActAditionalPlugin.Services
         {
             AddCerere(map, m);
             map["{{DataStartSuspendare}}"] = m.DataStartSuspendare.ToString("dd.MM.yyyy");
-            map["{{DataEndSuspendare}}"] = m.DataEndSuspendare.ToString("dd.MM.yyyy");
+            map["{{DataEndSuspendare}}"] = m.DataEndSuspendare != DateTime.MinValue
+                ? m.DataEndSuspendare.ToString("dd.MM.yyyy") : string.Empty;
             map["{{PerioadaSuspendare}}"] = m.PerioadaSuspendare ?? string.Empty;
             map["{{NumeCopil}}"] = m.NumeCopil ?? string.Empty;
+            map["{{CNPCopil}}"] = m.CNPCopil ?? string.Empty;
             map["{{SerieCertificat}}"] = m.SerieCertificat ?? string.Empty;
             map["{{NrCertificat}}"] = m.NrCertificat ?? string.Empty;
             map["{{GradHandicap}}"] = m.GradHandicap ?? string.Empty;
@@ -328,6 +336,15 @@ namespace ActAditionalPlugin.Services
         {
             AddDecizie(map, m);
             map["{{DataIncetare}}"] = m.DataIncetare.ToString("dd.MM.yyyy");
+        }
+
+        private static void AddIncetarePerioadaProba(Dictionary<string, string> map, IncetarePerioadaProbaModel m)
+        {
+            AddDecizie(map, m);
+            map["{{DataIncetare}}"] = m.DataIncetare.ToString("dd.MM.yyyy");
+            map["{{NrNotificare}}"] = m.NrNotificare ?? string.Empty;
+            map["{{DataNotificare}}"] = m.DataNotificare != DateTime.MinValue
+                ? m.DataNotificare.ToString("dd.MM.yyyy") : string.Empty;
         }
 
         private static void AddIncetareDisciplinar(Dictionary<string, string> map, IncetareDisciplinarModel m)

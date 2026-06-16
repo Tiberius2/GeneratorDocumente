@@ -11,8 +11,9 @@ namespace ActAditionalPlugin.UI
     public class SuspendareCresterecopilForm : DecizieCuCerereBase
     {
         private readonly SuspendareCresterecopilModel _m;
-        private DateTimePicker _dtpStart;
-        private TextBox _txtPerioad, _txtNumeCopil, _txtSerie, _txtNrCert;
+        private DateTimePicker _dtpStart, _dtpDataEnd;
+        private TextBox _txtPerioad, _txtNumeCopil, _txtCNPCopil, _txtSerie, _txtNrCert;
+        private bool _updatingPerioad;
 
         public SuspendareCresterecopilForm(SuspendareCresterecopilModel model)
             : base(model, "Suspendare CIM — creștere copil") { _m = model; Build(); }
@@ -21,25 +22,86 @@ namespace ActAditionalPlugin.UI
         {
             int y = 0;
 
-            var pnlDec = AddSectiune("DATE DECIZIE", ref y, 66);
+            var pnlDec = AddSectiune("DATE DECIZIE", ref y, 78);
             AddRandDecizie(pnlDec, 8);
 
-            var pnlCer = AddSectiune("DATE CERERE & SUSPENDARE", ref y, 118);
+            var pnlCer = AddSectiune("DATE CERERE SUSPENDARE", ref y, 132);
             AddRandCerere(pnlCer, 8);
-            _dtpStart = MakeDtp();
-            _txtPerioad = MakeInput("ex. 2 ani");
-            var tbl2 = AddRow(pnlCer, 56, new[] { 50, 50 });
-            AddLabeledInput(tbl2, 0, "Data start suspendare", _dtpStart);
-            AddLabeledInput(tbl2, 1, "Perioada suspendare", _txtPerioad);
 
-            var pnlCopil = AddSectiune("DATE COPIL", ref y, 66);
+            _dtpStart = MakeDtp();
+            _txtPerioad = MakeInput("ani");
+            _txtPerioad.Text = "2";
+            _dtpDataEnd = MakeDtp();
+            _dtpDataEnd.Value = _dtpStart.Value.AddYears(2);
+
+            // ── Handlere interdependente ──────────────────────
+            _txtPerioad.TextChanged += (s, e) =>
+            {
+                if (_updatingPerioad) return;
+                int ani;
+                if (int.TryParse(_txtPerioad.Text.Trim(), out ani) && ani > 0)
+                {
+                    _updatingPerioad = true;
+                    _dtpDataEnd.Value = _dtpStart.Value.AddYears(ani);
+                    _updatingPerioad = false;
+                }
+            };
+
+            _dtpDataEnd.ValueChanged += (s, e) =>
+            {
+                if (_updatingPerioad) return;
+                if (_dtpDataEnd.Value > _dtpStart.Value)
+                {
+                    int ani = _dtpDataEnd.Value.Year - _dtpStart.Value.Year;
+                    if (_dtpDataEnd.Value < _dtpStart.Value.AddYears(ani)) ani--;
+                    _updatingPerioad = true;
+                    _txtPerioad.Text = ani > 0 ? ani.ToString() : string.Empty;
+                    _updatingPerioad = false;
+                }
+            };
+
+            _dtpStart.ValueChanged += (s, e) =>
+            {
+                if (_updatingPerioad) return;
+                int ani;
+                if (int.TryParse(_txtPerioad.Text.Trim(), out ani) && ani > 0)
+                {
+                    _updatingPerioad = true;
+                    _dtpDataEnd.Value = _dtpStart.Value.AddYears(ani);
+                    _updatingPerioad = false;
+                }
+            };
+
+            var tbl2 = AddRow(pnlCer, 56, new[] { 33, 34, 33 });
+            AddLabeledInput(tbl2, 0, "Data start suspendare", _dtpStart);
+            AddLabeledInput(tbl2, 1, "Perioada (ani)", _txtPerioad);
+            AddLabeledInput(tbl2, 2, "Data sfarsit suspendare", _dtpDataEnd);
+
+            var pnlCopil = AddSectiune("DATE COPIL", ref y, 132);
             _txtNumeCopil = MakeInput("Numele copilului");
             _txtSerie = MakeInput("ex. ISN");
             _txtNrCert = MakeInput("ex. 2510724");
             var tblC = AddRow(pnlCopil, 8, new[] { 50, 20, 30 });
             AddLabeledInput(tblC, 0, "Numele copilului", _txtNumeCopil);
-            AddLabeledInput(tblC, 1, "Seria cert.", _txtSerie);
-            AddLabeledInput(tblC, 2, "Nr. certificat", _txtNrCert);
+            AddLabeledInput(tblC, 1, "Seria cert. nastere", _txtSerie);
+            AddLabeledInput(tblC, 2, "Nr. certificat nastere", _txtNrCert);
+
+            _txtCNPCopil = MakeInput("ex. 5260610xxxxxx");
+            _txtCNPCopil.TextChanged += (s, e) =>
+            {
+                var bd = CnpHelper.BirthDateFromCNP(_txtCNPCopil.Text.Trim());
+                if (bd.HasValue)
+                {
+                    int ani;
+                    int.TryParse(_txtPerioad.Text.Trim(), out ani);
+                    if (ani <= 0) ani = 2;
+                    _dtpDataEnd.Value = bd.Value.AddYears(ani);
+                }
+            };
+            var tblC2 = AddRow(pnlCopil, 56, new[] { 50, 50 });
+            AddLabeledInput(tblC2, 0, "CNP copil", _txtCNPCopil);
+
+            AddMentiuniSection(ref y);
         }
 
         protected override bool ValidateForm() => ValidateCerere();
@@ -48,8 +110,10 @@ namespace ActAditionalPlugin.UI
         {
             PopulateCerere(_m);
             _m.DataStartSuspendare = GetDate(_dtpStart);
+            _m.DataEndSuspendare = GetDate(_dtpDataEnd);
             _m.PerioadaSuspendare = GetText(_txtPerioad);
             _m.NumeCopil = GetText(_txtNumeCopil);
+            _m.CNPCopil = GetText(_txtCNPCopil);
             _m.SerieCertificat = GetText(_txtSerie);
             _m.NrCertificat = GetText(_txtNrCert);
         }
@@ -62,8 +126,9 @@ namespace ActAditionalPlugin.UI
     {
         private readonly SuspendareCresterecopilHandicapModel _m;
         private DateTimePicker _dtpStart, _dtpEnd, _dtpCertHand;
-        private TextBox _txtPerioad, _txtNumeCopil, _txtSerie, _txtNrCert;
+        private TextBox _txtPerioad, _txtNumeCopil, _txtCNPCopil, _txtSerie, _txtNrCert;
         private TextBox _txtGrad, _txtNrCertHand;
+        private bool _updatingPerioad;
 
         public SuspendareCresterecopilHandicapForm(SuspendareCresterecopilHandicapModel model)
             : base(model, "Suspendare CIM — creștere copil cu handicap") { _m = model; Build(); }
@@ -72,36 +137,95 @@ namespace ActAditionalPlugin.UI
         {
             int y = 0;
 
-            var pnlDec = AddSectiune("DATE DECIZIE", ref y, 66);
+            var pnlDec = AddSectiune("DATE DECIZIE", ref y, 78);
             AddRandDecizie(pnlDec, 8);
 
-            var pnlCer = AddSectiune("DATE CERERE & SUSPENDARE", ref y, 118);
+            var pnlCer = AddSectiune("DATE CERERE SUSPENDARE", ref y, 132);
             AddRandCerere(pnlCer, 8);
-            _dtpStart = MakeDtp();
-            _dtpEnd = MakeDtp();
-            _txtPerioad = MakeInput("ex. 1 an");
-            var tbl2 = AddRow(pnlCer, 56, new[] { 33, 33, 34 });
-            AddLabeledInput(tbl2, 0, "Data start", _dtpStart);
-            AddLabeledInput(tbl2, 1, "Data end", _dtpEnd);
-            AddLabeledInput(tbl2, 2, "Perioada", _txtPerioad);
 
-            var pnlCopil = AddSectiune("DATE COPIL", ref y, 66);
+            _dtpStart = MakeDtp();
+            _txtPerioad = MakeInput("ani");
+            _txtPerioad.Text = "3";
+            _dtpEnd = MakeDtp();
+            _dtpEnd.Value = _dtpStart.Value.AddYears(3);
+
+            // ── Handlere interdependente ──────────────────────
+            _txtPerioad.TextChanged += (s, e) =>
+            {
+                if (_updatingPerioad) return;
+                int ani;
+                if (int.TryParse(_txtPerioad.Text.Trim(), out ani) && ani > 0)
+                {
+                    _updatingPerioad = true;
+                    _dtpEnd.Value = _dtpStart.Value.AddYears(ani);
+                    _updatingPerioad = false;
+                }
+            };
+
+            _dtpEnd.ValueChanged += (s, e) =>
+            {
+                if (_updatingPerioad) return;
+                if (_dtpEnd.Value > _dtpStart.Value)
+                {
+                    int ani = _dtpEnd.Value.Year - _dtpStart.Value.Year;
+                    if (_dtpEnd.Value < _dtpStart.Value.AddYears(ani)) ani--;
+                    _updatingPerioad = true;
+                    _txtPerioad.Text = ani > 0 ? ani.ToString() : string.Empty;
+                    _updatingPerioad = false;
+                }
+            };
+
+            _dtpStart.ValueChanged += (s, e) =>
+            {
+                if (_updatingPerioad) return;
+                int ani;
+                if (int.TryParse(_txtPerioad.Text.Trim(), out ani) && ani > 0)
+                {
+                    _updatingPerioad = true;
+                    _dtpEnd.Value = _dtpStart.Value.AddYears(ani);
+                    _updatingPerioad = false;
+                }
+            };
+
+            var tbl2 = AddRow(pnlCer, 56, new[] { 33, 34, 33 });
+            AddLabeledInput(tbl2, 0, "Data start", _dtpStart);
+            AddLabeledInput(tbl2, 1, "Perioada (ani)", _txtPerioad);
+            AddLabeledInput(tbl2, 2, "Data sfarsit", _dtpEnd);
+
+            var pnlCopil = AddSectiune("DATE COPIL", ref y, 132);
             _txtNumeCopil = MakeInput("Numele copilului");
             _txtSerie = MakeInput("ex. N.14");
             _txtNrCert = MakeInput("ex. 219574");
             var tblC = AddRow(pnlCopil, 8, new[] { 50, 20, 30 });
             AddLabeledInput(tblC, 0, "Numele copilului", _txtNumeCopil);
-            AddLabeledInput(tblC, 1, "Seria cert.", _txtSerie);
-            AddLabeledInput(tblC, 2, "Nr. certificat", _txtNrCert);
+            AddLabeledInput(tblC, 1, "Seria cert. nastere", _txtSerie);
+            AddLabeledInput(tblC, 2, "Nr. certificat nastere", _txtNrCert);
 
-            var pnlHand = AddSectiune("CERTIFICAT HANDICAP", ref y, 66);
+            _txtCNPCopil = MakeInput("ex. 5260610xxxxxx");
+            _txtCNPCopil.TextChanged += (s, e) =>
+            {
+                var bd = CnpHelper.BirthDateFromCNP(_txtCNPCopil.Text.Trim());
+                if (bd.HasValue)
+                {
+                    int ani;
+                    int.TryParse(_txtPerioad.Text.Trim(), out ani);
+                    if (ani <= 0) ani = 3;
+                    _dtpEnd.Value = bd.Value.AddYears(ani);
+                }
+            };
+            var tblC2 = AddRow(pnlCopil, 56, new[] { 50, 50 });
+            AddLabeledInput(tblC2, 0, "CNP copil", _txtCNPCopil);
+
+            var pnlHand = AddSectiune("CERTIFICAT HANDICAP", ref y, 78);
             _txtGrad = MakeInput("ex. mediu");
             _txtNrCertHand = MakeInput("ex. 1517");
             _dtpCertHand = MakeDtp();
             var tblH = AddRow(pnlHand, 8, new[] { 30, 30, 40 });
             AddLabeledInput(tblH, 0, "Grad handicap", _txtGrad);
-            AddLabeledInput(tblH, 1, "Nr. certificat", _txtNrCertHand);
-            AddLabeledInput(tblH, 2, "Data certificat", _dtpCertHand);
+            AddLabeledInput(tblH, 1, "Nr. certificat handicap", _txtNrCertHand);
+            AddLabeledInput(tblH, 2, "Data certificat handicap", _dtpCertHand);
+
+            AddMentiuniSection(ref y);
         }
 
         protected override bool ValidateForm() => ValidateCerere();
@@ -113,6 +237,7 @@ namespace ActAditionalPlugin.UI
             _m.DataEndSuspendare = GetDate(_dtpEnd);
             _m.PerioadaSuspendare = GetText(_txtPerioad);
             _m.NumeCopil = GetText(_txtNumeCopil);
+            _m.CNPCopil = GetText(_txtCNPCopil);
             _m.SerieCertificat = GetText(_txtSerie);
             _m.NrCertificat = GetText(_txtNrCert);
             _m.GradHandicap = GetText(_txtGrad);
@@ -151,11 +276,11 @@ namespace ActAditionalPlugin.UI
             int y = 0;
 
             // DATE DECIZIE
-            var pnlDec = AddSectiune("DATE DECIZIE", ref y, 66);
+            var pnlDec = AddSectiune("DATE DECIZIE", ref y, 78);
             AddRandDecizie(pnlDec, 8);
 
             // DATE REFERAT
-            var pnlRef = AddSectiune("DATE REFERAT", ref y, 118);
+            var pnlRef = AddSectiune("DATE REFERAT", ref y, 132);
             _txtNrRef = MakeInput("ex. 182");
             _dtpDataRef = MakeDtp();
             _txtIntocmit = MakeInput("ex. Inginer Muraru Mirela");
@@ -168,7 +293,7 @@ namespace ActAditionalPlugin.UI
             _dtpEnd = MakeDtp();
             var tbl2 = AddRow(pnlRef, 8, new[] { 50, 50 });
             AddLabeledInput(tbl2, 0, "Data start suspendare", _dtpStart);
-            AddLabeledInput(tbl2, 1, "Data end suspendare", _dtpEnd);
+            AddLabeledInput(tbl2, 1, "Data sfarsit suspendare", _dtpEnd);
 
             // CHECKBOX
             var pnlChk = new Panel
@@ -202,7 +327,7 @@ namespace ActAditionalPlugin.UI
             {
                 Text = "DATA ÎNCETARE SUSPENDARE",
                 Font = FSectiune,
-                ForeColor = Albastru,
+                ForeColor = ButtonPalettes.Primary.Foreground,
                 AutoSize = true,
                 Left = 0,
                 Top = y
@@ -249,6 +374,7 @@ namespace ActAditionalPlugin.UI
 
             // Wrapper pentru toggle vizibilitate
             _pnlIncetareWrapper = pnlIncInner;
+            y += pnlIncInner.Height + 8;   // mențiuni se pozitioneaza sub wrapper
 
             // Toggle la schimbare checkbox
             _chkIncludeIncetare.CheckedChanged += (s, e) =>
@@ -256,6 +382,8 @@ namespace ActAditionalPlugin.UI
                 pnlIncLabel.Visible = _chkIncludeIncetare.Checked;
                 _pnlIncetareWrapper.Visible = _chkIncludeIncetare.Checked;
             };
+
+            AddMentiuniSection(ref y);
         }
 
         protected override bool ValidateForm() => ValidateDecizie();
@@ -300,16 +428,18 @@ namespace ActAditionalPlugin.UI
         private void Build()
         {
             int y = 0;
-            var pnlDec = AddSectiune("DATE DECIZIE", ref y, 66);
+            var pnlDec = AddSectiune("DATE DECIZIE", ref y, 78);
             AddRandDecizie(pnlDec, 8);
 
-            var pnlCer = AddSectiune("DATE CERERE & SUSPENDARE", ref y, 118);
+            var pnlCer = AddSectiune("DATE CERERE SUSPENDARE", ref y, 132);
             AddRandCerere(pnlCer, 8);
             _dtpStart = MakeDtp();
             _dtpEnd = MakeDtp();
             var tbl2 = AddRow(pnlCer, 56, new[] { 50, 50 });
             AddLabeledInput(tbl2, 0, "Data start suspendare", _dtpStart);
-            AddLabeledInput(tbl2, 1, "Data end suspendare", _dtpEnd);
+            AddLabeledInput(tbl2, 1, "Data sfarsit suspendare", _dtpEnd);
+
+            AddMentiuniSection(ref y);
         }
 
         protected override bool ValidateForm() => ValidateCerere();
@@ -336,18 +466,20 @@ namespace ActAditionalPlugin.UI
         private void Build()
         {
             int y = 0;
-            var pnlDec = AddSectiune("DATE DECIZIE", ref y, 66);
+            var pnlDec = AddSectiune("DATE DECIZIE", ref y, 78);
             AddRandDecizie(pnlDec, 8);
 
-            var pnlCer = AddSectiune("DATE CERERE & SUSPENDARE", ref y, 118);
+            var pnlCer = AddSectiune("DATE CERERE SUSPENDARE", ref y, 132);
             AddRandCerere(pnlCer, 8);
             _dtpStart = MakeDtp();
             _dtpEnd = MakeDtp();
             _dtpIncetare = MakeDtp();
             var tbl2 = AddRow(pnlCer, 56, new[] { 33, 33, 34 });
             AddLabeledInput(tbl2, 0, "Data start suspendare", _dtpStart);
-            AddLabeledInput(tbl2, 1, "Data end suspendare", _dtpEnd);
+            AddLabeledInput(tbl2, 1, "Data sfarsit suspendare", _dtpEnd);
             AddLabeledInput(tbl2, 2, "Data încetare suspendare", _dtpIncetare);
+
+            AddMentiuniSection(ref y);
         }
 
         protected override bool ValidateForm() => ValidateCerere();
@@ -375,14 +507,16 @@ namespace ActAditionalPlugin.UI
         private void Build()
         {
             int y = 0;
-            var pnlDec = AddSectiune("DATE DECIZIE", ref y, 66);
+            var pnlDec = AddSectiune("DATE DECIZIE", ref y, 78);
             AddRandDecizie(pnlDec, 8);
 
-            var pnlCer = AddSectiune("DATE CERERE & ÎNCETARE", ref y, 118);
+            var pnlCer = AddSectiune("DATE CERERE ÎNCETARE", ref y, 132);
             AddRandCerere(pnlCer, 8);
             _dtpIncetare = MakeDtp();
             var tbl2 = AddRow(pnlCer, 56, new[] { 50, 50 });
             AddLabeledInput(tbl2, 0, "Data încetare suspendare", _dtpIncetare);
+
+            AddMentiuniSection(ref y);
         }
 
         protected override bool ValidateForm() => ValidateCerere();
@@ -391,6 +525,37 @@ namespace ActAditionalPlugin.UI
         {
             PopulateCerere(_m);
             _m.DataIncetareSuspendare = GetDate(_dtpIncetare);
+        }
+    }
+
+    // ── Helper algoritm CNP romanesc ──────────────────────────
+    internal static class CnpHelper
+    {
+        /// <summary>
+        /// Extrage data nasterii din CNP romanesc (13 cifre).
+        /// Returneaza null daca CNP-ul este invalid.
+        /// </summary>
+        internal static DateTime? BirthDateFromCNP(string cnp)
+        {
+            if (string.IsNullOrWhiteSpace(cnp) || cnp.Length != 13) return null;
+            foreach (char c in cnp) if (!char.IsDigit(c)) return null;
+
+            int s = cnp[0] - '0';
+            int yy = int.Parse(cnp.Substring(1, 2));
+            int mm = int.Parse(cnp.Substring(3, 2));
+            int dd = int.Parse(cnp.Substring(5, 2));
+
+            int century;
+            switch (s)
+            {
+                case 1: case 2: century = 1900; break;
+                case 3: case 4: century = 1800; break;
+                case 5: case 6: century = 2000; break;
+                default: return null; // rezidenti/straini — nu se calculeaza
+            }
+
+            try { return new System.DateTime(century + yy, mm, dd); }
+            catch { return null; }
         }
     }
 }

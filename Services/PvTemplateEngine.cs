@@ -150,10 +150,10 @@ namespace ActAditionalPlugin.Services
             };
 
             var echip = m as PvEchipamenteModel;
-            if (echip != null) map["{{Mentiuni}}"] = echip.Mentiuni ?? string.Empty;
+            if (echip != null) map["{{MentiuniDocument}}"] = echip.MentiuniDocument ?? string.Empty;
 
             var elec = m as PvElecroniceModel;
-            if (elec != null) map["{{Mentiuni}}"] = elec.Mentiuni ?? string.Empty;
+            if (elec != null) map["{{MentiuniDocument}}"] = elec.MentiuniDocument ?? string.Empty;
 
             var auto = m as PvAutovehiculModel;
             if (auto != null) AddAutovehiculPlaceholders(map, auto);
@@ -205,7 +205,7 @@ namespace ActAditionalPlugin.Services
             map["{{AsigurareRCA}}"]            = auto.AsigurareRCA ?? "DA";
             map["{{Rovinieta}}"]               = auto.Rovinieta ?? "DA";
 
-            map["{{Mentiuni}}"] = string.Empty;
+            map["{{MentiuniDocument}}"] = auto.MentiuniDocument ?? string.Empty;
         }
 
         // ── Replace in body ───────────────────────────────────

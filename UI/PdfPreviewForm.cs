@@ -2,30 +2,27 @@
 using System.Drawing;
 using System.IO;
 using System.Windows.Forms;
+using ActAditionalPlugin.Models;
 using PdfiumViewer;
 
 namespace ActAditionalPlugin.UI
 {
-    /// <summary>
-    /// Fereastra de previzualizare PDF.
-    /// Primeste calea catre un PDF temporar, il afiseaza si il sterge la inchidere.
-    /// </summary>
     public class PdfPreviewForm : Form
     {
         private readonly string _pdfPath;
         private readonly bool _deletePdfOnClose;
+        private readonly DocumentTheme _theme;
         private PdfViewer _viewer;
         private Button _btnGenereaza;
         private Button _btnInchide;
 
         public bool UserConfirmed { get; private set; } = false;
 
-        private static readonly Color Albastru = Color.FromArgb(63, 129, 198);
-
-        public PdfPreviewForm(string pdfPath, bool deletePdfOnClose = true)
+        public PdfPreviewForm(string pdfPath, DocumentTheme theme, bool deletePdfOnClose = true)
         {
             _pdfPath = pdfPath;
             _deletePdfOnClose = deletePdfOnClose;
+            _theme = theme ?? DocumentTheme.Acte;
 
             Text = "Previzualizare document";
             Size = new Size(900, 780);
@@ -41,12 +38,7 @@ namespace ActAditionalPlugin.UI
         private void BuildUI()
         {
             // ── Header ────────────────────────────────────────
-            var pnlHeader = new Panel
-            {
-                Dock = DockStyle.Top,
-                Height = 50,
-                BackColor = Albastru
-            };
+            var pnlHeader = new Panel { Dock = DockStyle.Top, Height = 50, BackColor = _theme.Accent };
             pnlHeader.Controls.Add(new Label
             {
                 Text = "Previzualizare document generat",
@@ -57,40 +49,32 @@ namespace ActAditionalPlugin.UI
             });
 
             // ── Footer ────────────────────────────────────────
-            var pnlFooter = new Panel
-            {
-                Dock = DockStyle.Bottom,
-                Height = 56,
-                BackColor = Color.White
-            };
+            var pnlFooter = new Panel { Dock = DockStyle.Bottom, Height = 56, BackColor = Color.White };
             pnlFooter.Paint += (s, e) =>
             {
-                using (var pen = new Pen(Color.FromArgb(180, 205, 235)))
+                using (var pen = new Pen(_theme.AccentBorder))
                     e.Graphics.DrawLine(pen, 0, 0, pnlFooter.Width, 0);
             };
 
             _btnGenereaza = new Button
             {
-                Text = "✓ Salvează PDF",
+                Text = "✓ Genereaza PDF",
                 Size = new Size(160, 36),
-                FlatStyle = FlatStyle.Flat,
-                BackColor = Albastru,
+                FlatStyle = FlatStyle.Popup,
+                BackColor = _theme.Accent,
                 ForeColor = Color.White,
                 Font = new Font("Segoe UI", 10.5f, FontStyle.Bold),
                 Cursor = Cursors.Hand,
                 Top = 10,
                 Anchor = AnchorStyles.Right | AnchorStyles.Top
             };
-            _btnGenereaza.FlatAppearance.BorderSize = 0;
-            _btnGenereaza.Click += (s, e) =>
-            {
-                UserConfirmed = true;
-                Close();
-            };
+            _btnGenereaza.MouseEnter += (s, e) => _btnGenereaza.BackColor = _theme.AccentDark;
+            _btnGenereaza.MouseLeave += (s, e) => _btnGenereaza.BackColor = _theme.Accent;
+            _btnGenereaza.Click += (s, e) => { UserConfirmed = true; Close(); };
 
             _btnInchide = new Button
             {
-                Text = "✕ Închide",
+                Text = "✕ Renunta",
                 Size = new Size(120, 36),
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Color.FromArgb(240, 242, 246),
@@ -101,7 +85,7 @@ namespace ActAditionalPlugin.UI
                 Anchor = AnchorStyles.Right | AnchorStyles.Top
             };
             _btnInchide.FlatAppearance.BorderSize = 1;
-            _btnInchide.FlatAppearance.BorderColor = Color.FromArgb(200, 210, 225);
+            _btnInchide.FlatAppearance.BorderColor = _theme.AccentBorder;
             _btnInchide.Click += (s, e) => Close();
 
             pnlFooter.Controls.AddRange(new Control[] { _btnGenereaza, _btnInchide });
@@ -118,7 +102,7 @@ namespace ActAditionalPlugin.UI
             {
                 Dock = DockStyle.Fill,
                 BackColor = Color.FromArgb(230, 230, 230),
-                ShowToolbar = true,
+                ShowToolbar = false,
                 ShowBookmarks = false,
             };
 
@@ -139,10 +123,7 @@ namespace ActAditionalPlugin.UI
                         "Eroare", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
                 }
-
-                // PdfiumViewer necesita stream deschis pe durata afisarii
-                var doc = PdfDocument.Load(_pdfPath);
-                _viewer.Document = doc;
+                _viewer.Document = PdfDocument.Load(_pdfPath);
             }
             catch (Exception ex)
             {
@@ -153,14 +134,9 @@ namespace ActAditionalPlugin.UI
 
         private void PdfPreviewForm_FormClosed(object sender, FormClosedEventArgs e)
         {
-            // Eliberam documentul
             try { _viewer.Document?.Dispose(); } catch { }
-
-            // Stergem PDF-ul temporar daca e cazul
             if (_deletePdfOnClose && File.Exists(_pdfPath))
-            {
                 try { File.Delete(_pdfPath); } catch { }
-            }
         }
     }
 }

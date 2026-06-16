@@ -16,7 +16,7 @@ namespace ActAditionalPlugin.Models
         public string NrCim { get; set; }
         public DateTime DataCim { get; set; }
 
-        // ── Angajator (din PluginConfig) ──────────────────────
+        // ── Angajator (din PluginConfig / ERP) ───────────────
         public string NumeAngajator { get; set; }
         public string CIFAngajator { get; set; }
         public string ReprezentantLegal { get; set; }
@@ -29,8 +29,14 @@ namespace ActAditionalPlugin.Models
         public string EmailCompanie { get; set; }
         public string WebsiteCompanie { get; set; }
 
-        // ── Tip document (pentru routing in TemplateEngine) ───
+        // ── Tip document ──────────────────────────────────────
         public abstract TipDocument TipDocument { get; }
+
+        // ── Registratura ──────────────────────────────────────
+        public string CodInregistrare { get; set; }
+
+        // ── Mentiuni / Observatii ─────────────────────────────
+        public string MentiuniDocument { get; set; }
 
         public DocumentModelBase()
         {
@@ -49,6 +55,8 @@ namespace ActAditionalPlugin.Models
             NrTelefonCompanie = string.Empty;
             EmailCompanie = string.Empty;
             WebsiteCompanie = string.Empty;
+            CodInregistrare = string.Empty;
+            MentiuniDocument = string.Empty;
         }
     }
 
@@ -66,7 +74,8 @@ namespace ActAditionalPlugin.Models
         IncetareSuspendare = 6,
         IncetareDemisie = 7,
         IncetareExpirare = 8,
-        IncetareDisciplinar = 9
+        IncetareDisciplinar = 9,
+        IncetarePerioadaProba = 10
     }
 
     // ══════════════════════════════════════════════════════════
@@ -76,16 +85,12 @@ namespace ActAditionalPlugin.Models
     {
         public override TipDocument TipDocument { get { return TipDocument.ActAditional; } }
 
-        public string CodInregistrare { get; set; }
         public DateTime DataEmitereAct { get; set; }
         public DateTime DataVigoare { get; set; }
-
-        // Modificari Art. I
         public List<PunctModificare> Modificari { get; set; }
 
         public ActAditionalModel()
         {
-            CodInregistrare = string.Empty;
             Modificari = new List<PunctModificare>();
         }
     }
@@ -103,17 +108,12 @@ namespace ActAditionalPlugin.Models
     }
 
     // ══════════════════════════════════════════════════════════
-    //  MODEL BAZA DECIZIE — campuri comune tuturor deciziilor
+    //  MODEL BAZA DECIZIE
     // ══════════════════════════════════════════════════════════
     public abstract class DecizieModelBase : DocumentModelBase
     {
-        public string CodInregistrare { get; set; }
         public DateTime DataDecizie { get; set; }
-
-        public DecizieModelBase()
-        {
-            CodInregistrare = string.Empty;
-        }
+        // CodInregistrare e pe DocumentModelBase
     }
 
     // ══════════════════════════════════════════════════════════
@@ -138,8 +138,10 @@ namespace ActAditionalPlugin.Models
         public override TipDocument TipDocument { get { return TipDocument.SuspendareCresterecopil; } }
 
         public DateTime DataStartSuspendare { get; set; }
-        public string PerioadaSuspendare { get; set; }  // ex: "2 ani"
+        public DateTime DataEndSuspendare { get; set; }
+        public string PerioadaSuspendare { get; set; }
         public string NumeCopil { get; set; }
+        public string CNPCopil { get; set; }
         public string SerieCertificat { get; set; }
         public string NrCertificat { get; set; }
 
@@ -147,6 +149,7 @@ namespace ActAditionalPlugin.Models
         {
             PerioadaSuspendare = string.Empty;
             NumeCopil = string.Empty;
+            CNPCopil = string.Empty;
             SerieCertificat = string.Empty;
             NrCertificat = string.Empty;
         }
@@ -163,9 +166,10 @@ namespace ActAditionalPlugin.Models
         public DateTime DataEndSuspendare { get; set; }
         public string PerioadaSuspendare { get; set; }
         public string NumeCopil { get; set; }
+        public string CNPCopil { get; set; }
         public string SerieCertificat { get; set; }
         public string NrCertificat { get; set; }
-        public string GradHandicap { get; set; }  // ex: "mediu", "grav"
+        public string GradHandicap { get; set; }
         public string NrCertificatHandicap { get; set; }
         public DateTime DataCertificatHandicap { get; set; }
 
@@ -173,6 +177,7 @@ namespace ActAditionalPlugin.Models
         {
             PerioadaSuspendare = string.Empty;
             NumeCopil = string.Empty;
+            CNPCopil = string.Empty;
             SerieCertificat = string.Empty;
             NrCertificat = string.Empty;
             GradHandicap = string.Empty;
@@ -181,8 +186,7 @@ namespace ActAditionalPlugin.Models
     }
 
     // ══════════════════════════════════════════════════════════
-    //  4. SUSPENDARE — absente nemotivate (art. 51 alin. 2)
-    //  Structura bazata pe referat, nu cerere (ca la disciplinar)
+    //  4. SUSPENDARE — absente nemotivate
     // ══════════════════════════════════════════════════════════
     public class SuspendareAbsenteNemotivateModel : DecizieModelBase
     {
@@ -194,7 +198,7 @@ namespace ActAditionalPlugin.Models
         public DateTime DataStartSuspendare { get; set; }
         public DateTime DataEndSuspendare { get; set; }
         public DateTime DataIncetareSuspendare { get; set; }
-        public bool IncludeIncetare { get; set; }  // alege template-ul
+        public bool IncludeIncetare { get; set; }
 
         public SuspendareAbsenteNemotivateModel()
         {
@@ -205,7 +209,7 @@ namespace ActAditionalPlugin.Models
     }
 
     // ══════════════════════════════════════════════════════════
-    //  5. SUSPENDARE — acordul partilor (art. 54)
+    //  5. SUSPENDARE — acordul partilor
     // ══════════════════════════════════════════════════════════
     public class SuspendareAcordPartiModel : DecizieModelCuCerere
     {
@@ -216,7 +220,7 @@ namespace ActAditionalPlugin.Models
     }
 
     // ══════════════════════════════════════════════════════════
-    //  6. SUSPENDARE + INCETARE SUSPENDARE (combinat)
+    //  6. SUSPENDARE + INCETARE SUSPENDARE
     // ══════════════════════════════════════════════════════════
     public class SuspendareSiIncetareSuspendareModel : DecizieModelCuCerere
     {
@@ -245,7 +249,7 @@ namespace ActAditionalPlugin.Models
         public override TipDocument TipDocument { get { return TipDocument.IncetareDemisie; } }
 
         public DateTime DataIncetare { get; set; }
-        public string ArticolDemisie { get; set; }  // ex: "81 alin. 1" sau "81 alin. 7"
+        public string ArticolDemisie { get; set; }
 
         public IncetareDemisieModel()
         {
@@ -271,7 +275,7 @@ namespace ActAditionalPlugin.Models
         public override TipDocument TipDocument { get { return TipDocument.IncetareDisciplinar; } }
 
         public DateTime DataIncetare { get; set; }
-        public string PerioadaCercetare { get; set; }  // ex: "12.06.2025 – 27.06.2025"
+        public string PerioadaCercetare { get; set; }
         public string NrProcesVerbal { get; set; }
         public DateTime DataProcesVerbal { get; set; }
         public string LocCercetare { get; set; }
@@ -279,8 +283,8 @@ namespace ActAditionalPlugin.Models
         public string ImprejurariFapte { get; set; }
         public string GradVinovatie { get; set; }
         public string ConsecinteAbateri { get; set; }
-        public string NumeIntocmit { get; set; }  // ex: "Marin Iulia-Alina"
-        public string FunctieIntocmit { get; set; }  // ex: "Specialist Resurse Umane"
+        public string NumeIntocmit { get; set; }
+        public string FunctieIntocmit { get; set; }
 
         public IncetareDisciplinarModel()
         {
@@ -293,6 +297,23 @@ namespace ActAditionalPlugin.Models
             ConsecinteAbateri = string.Empty;
             NumeIntocmit = string.Empty;
             FunctieIntocmit = string.Empty;
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  11. INCETARE CIM — perioada de proba
+    // ══════════════════════════════════════════════════════════
+    public class IncetarePerioadaProbaModel : DecizieModelBase
+    {
+        public override TipDocument TipDocument { get { return TipDocument.IncetarePerioadaProba; } }
+
+        public DateTime DataIncetare { get; set; }
+        public string NrNotificare { get; set; }
+        public DateTime DataNotificare { get; set; }
+
+        public IncetarePerioadaProbaModel()
+        {
+            NrNotificare = string.Empty;
         }
     }
 }
