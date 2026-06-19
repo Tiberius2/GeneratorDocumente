@@ -15,6 +15,15 @@ namespace ActAditionalPlugin.UI
     {
         public DocumentSelection Selection { get; private set; }
 
+        // ── Angajat selectat ──────────────────────────────────
+        public int SelectedPrsnId { get; private set; }
+        public string SelectedName { get; private set; }
+        public string SelectedCNP { get; private set; }
+        public string SelectedFunctie { get; private set; }
+
+        private readonly System.Collections.Generic.List<AngajatPickerDialog.AngajatItem> _angajati;
+        private Button _btnAngajat;
+
         // ── Definitii carduri ──────────────────────────────────
         private static readonly (string Cat, string Titlu, string Sub, DocumentSelection Sel, DocumentTheme Theme)[] Entries =
         {
@@ -73,8 +82,15 @@ namespace ActAditionalPlugin.UI
         private Button[] _cards;
         private Button _btnContinua;
 
-        public SelectorDialog()
+        public SelectorDialog(
+            System.Collections.Generic.List<AngajatPickerDialog.AngajatItem> angajati = null,
+            int currentPrsnId = 0)
         {
+            _angajati = angajati ?? new System.Collections.Generic.List<AngajatPickerDialog.AngajatItem>();
+            // Pre-selecteaza angajatul curent
+            var current = _angajati.FirstOrDefault(a => a.PrsnId == currentPrsnId);
+            if (current != null) SetSelectedAngajat(current);
+
             Text = "Generator Documente HR";
             Size = new Size(1400, 800);
             FormBorderStyle = FormBorderStyle.Sizable;
@@ -88,24 +104,87 @@ namespace ActAditionalPlugin.UI
 
         private void BuildUI()
         {
-            // Header neutru (nu e asociat niciunei categorii)
+            // Header — angajat stanga, titlu dreapta
             var pnlHeader = new Panel { Dock = DockStyle.Top, Height = 70, BackColor = Color.FromArgb(66, 76, 103) };
-            pnlHeader.Controls.Add(new Label
+
+            // ── Stanga: label mare + buton dropdown ────────────
+            string btnText = SelectedPrsnId > 0
+                ? string.Format("   {0}   ▾", SelectedName)
+                : "Alege... ▾";
+
+            var lblAlege = new Label
+            {
+                Text = "Selectează Angajatul:",
+                Font = new Font("Segoe UI", 15f, FontStyle.Bold),
+                ForeColor = Color.White,
+                AutoSize = true,
+                Left = 20,
+                Top = 18,
+                Anchor = AnchorStyles.Left | AnchorStyles.Top
+            };
+            pnlHeader.Controls.Add(lblAlege);
+
+            _btnAngajat = new Button
+            {
+                Text = btnText,
+                Height = 32,
+                Width = 300,
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(50, 62, 88),
+                ForeColor = Color.FromArgb(200, 220, 255),
+                Font = new Font("Segoe UI", 11f),
+                TextAlign = ContentAlignment.MiddleRight,
+                Cursor = Cursors.Hand,
+                Anchor = AnchorStyles.Left | AnchorStyles.Top
+            };
+            _btnAngajat.FlatAppearance.BorderSize = 2;
+            _btnAngajat.FlatAppearance.BorderColor = Color.FromArgb(233, 239, 247);
+            _btnAngajat.Click += BtnAngajat_Click;
+            pnlHeader.Controls.Add(_btnAngajat);
+
+            // Pozitioneaza butonul langa label dupa ce labelul e calculat
+            Action pozitioneazaBtn = () =>
+            {
+                _btnAngajat.Left = lblAlege.Right + 12;
+                _btnAngajat.Top = lblAlege.Top + (lblAlege.Height - _btnAngajat.Height) / 2;
+            };
+            pnlHeader.HandleCreated += (s, e) => pozitioneazaBtn();
+            lblAlege.SizeChanged += (s, e) => pozitioneazaBtn();
+
+            // ── Dreapta: titlu + subtitlu ──────────────────────
+            var lblTitlu = new Label
             {
                 Text = "Generator Documente HR",
                 Font = new Font("Segoe UI", 15f, FontStyle.Bold),
                 ForeColor = Color.White,
                 AutoSize = true,
-                Location = new Point(20, 10)
-            });
-            pnlHeader.Controls.Add(new Label
+                Anchor = AnchorStyles.Right | AnchorStyles.Top
+            };
+            var lblSub = new Label
             {
                 Text = "Selectează tipul documentului",
                 Font = new Font("Segoe UI", 9f),
                 ForeColor = Color.FromArgb(180, 195, 215),
                 AutoSize = true,
-                Location = new Point(20, 44)
-            });
+                Anchor = AnchorStyles.Right | AnchorStyles.Top
+            };
+            pnlHeader.Controls.Add(lblTitlu);
+            pnlHeader.Controls.Add(lblSub);
+            pnlHeader.Resize += (s, e) =>
+            {
+                lblTitlu.Left = pnlHeader.Width - lblTitlu.Width - 20;
+                lblTitlu.Top = 10;
+                lblSub.Left = pnlHeader.Width - lblSub.Width - 20;
+                lblSub.Top = 44;
+            };
+            // Pozitionare initiala dupa layout
+            pnlHeader.HandleCreated += (s, e) =>
+            {
+                lblTitlu.Left = pnlHeader.Width - lblTitlu.Width - 20;
+                lblTitlu.Top = 10;
+                lblSub.Left = pnlHeader.Width - lblSub.Width - 20;
+                lblSub.Top = 44;
+            };
 
             // Footer
             var pnlFooter = new Panel { Dock = DockStyle.Bottom, Height = 56, BackColor = Color.White };
@@ -376,6 +455,26 @@ namespace ActAditionalPlugin.UI
             _btnContinua.ForeColor = ButtonPalettes.Primary.Foreground;
             _btnContinua.Font = new Font("Segoe UI", 10f, FontStyle.Bold);
             _btnContinua.Cursor = Cursors.Hand;
+        }
+
+        private void BtnAngajat_Click(object sender, EventArgs e)
+        {
+            using (var picker = new AngajatPickerDialog(_angajati, SelectedPrsnId))
+            {
+                if (picker.ShowDialog(this) != DialogResult.OK) return;
+                var sel = _angajati.FirstOrDefault(a => a.PrsnId == picker.SelectedPrsnId);
+                if (sel != null) SetSelectedAngajat(sel);
+            }
+        }
+
+        private void SetSelectedAngajat(AngajatPickerDialog.AngajatItem a)
+        {
+            SelectedPrsnId = a.PrsnId;
+            SelectedName = a.Name;
+            SelectedCNP = a.CNP;
+            SelectedFunctie = a.Functie;
+            if (_btnAngajat != null)
+                _btnAngajat.Text = string.Format("{0}  ▾", a.Name);
         }
 
         private void Confirma()

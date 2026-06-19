@@ -30,6 +30,7 @@ namespace ActAditionalPlugin.UI
         /// </summary>
         protected TextBox CodInregistrareField { get; set; }
         protected TextBox _txtMentiuni;
+        protected System.Windows.Forms.Button BulkButton { get; private set; }
 
         protected FormBase(string titlu, DocumentTheme theme)
         {
@@ -111,9 +112,31 @@ namespace ActAditionalPlugin.UI
             btnInapoi.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
 
             pnlFooter.Controls.AddRange(new Control[] { btnGen, btnInapoi });
+
+            // Buton generare in masa — activat de subclase (ActAditionalForm)
+            var btnBulk = new Button
+            {
+                Text = "⊕ Generare în masă",
+                Height = 38,
+                Width = 180,
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(240, 173, 78),
+                ForeColor = Color.FromArgb(60, 40, 10),
+                Font = new Font("Segoe UI", 9f, FontStyle.Bold),
+                Cursor = Cursors.Hand,
+                Top = 9,
+                Visible = false,
+                Anchor = AnchorStyles.Right | AnchorStyles.Top
+            };
+            btnBulk.FlatAppearance.BorderSize = 0;
+            pnlFooter.Controls.Add(btnBulk);
+            BulkButton = btnBulk;
+
             pnlFooter.Resize += (s, e) =>
             {
                 btnGen.Left = pnlFooter.Width - btnGen.Width - 18;
+                if (BulkButton != null && BulkButton.Visible)
+                    BulkButton.Left = btnGen.Left - BulkButton.Width - 10;
             };
             btnGen.Left = 680;
 
@@ -233,6 +256,7 @@ namespace ActAditionalPlugin.UI
             _txtMentiuni = MakeMultiline(52);
             _txtMentiuni.Width = Math.Max(pnl.ClientSize.Width - pnl.Padding.Horizontal, 300);
             pnl.Controls.Add(_txtMentiuni);
+            pnl.Resize += (s, e) => _txtMentiuni.Width = pnl.ClientSize.Width - pnl.Padding.Horizontal;
             return pnl;
         }
 

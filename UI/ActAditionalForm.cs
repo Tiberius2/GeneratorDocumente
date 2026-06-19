@@ -24,15 +24,8 @@ namespace ActAditionalPlugin.UI
             _aa = model;
             _clauze = LoadClauzeActive();
             BuildBody();
-        }
 
-        private static List<ClauzeActAditional> LoadClauzeActive()
-        {
-            var cfg = ClauzeService.Load();
-            var tip = cfg.GetTipSelectat();
-            return tip != null
-                ? tip.Clauze.Where(c => c.Activ).ToList()
-                : new List<ClauzeActAditional>();
+            // Activeaza butonul de generare in masa daca contextul e disponibil
         }
 
         private void BuildBody()
@@ -119,6 +112,31 @@ namespace ActAditionalPlugin.UI
                     foreach (var p in _puncte) p.SetClauze(_clauze);
                 }
             };
+            var btnBulk = new Button
+            {
+                Text = "⊕ Generare în masă",
+                Height = 28,
+                Width = 170,
+                Font = new Font("Segoe UI", 9f, FontStyle.Bold),
+                Top = 3,
+                Anchor = AnchorStyles.Right | AnchorStyles.Top,
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(240, 173, 78),
+                ForeColor = Color.FromArgb(60, 40, 10),
+                Cursor = Cursors.Hand
+            };
+            btnBulk.FlatAppearance.BorderSize = 0;
+            btnBulk.Visible = false;
+            btnBulk.Click += (s, e) => DoBulkGenerate();
+
+            pnlModHeader.Controls.Add(btnBulk);
+            pnlModHeader.Resize += (s, e) =>
+            {
+                btnAdd.Left = pnlModHeader.Width - btnAdd.Width;
+                btnEditorClauze.Left = btnAdd.Left - btnEditorClauze.Width - 8;
+                btnBulk.Left = btnEditorClauze.Left - btnBulk.Width - 8;
+            };
+            btnBulk.Left = btnEditorClauze.Left - btnBulk.Width - 8;
 
             pnlModHeader.Controls.Add(btnAdd);
             pnlModHeader.Controls.Add(btnEditorClauze);
@@ -201,5 +219,167 @@ namespace ActAditionalPlugin.UI
 
         protected override string GetTemplatePath()
             => PluginConfig.GetTemplatePath(TipDocument.ActAditional);
+
+        protected override DateTime GetRegistraturaDate()
+            => _dtpDataAct != null ? _dtpDataAct.Value.Date : base.GetRegistraturaDate();
+
+        private static List<ClauzeActAditional> LoadClauzeActive()
+        {
+            var cfg = ActAditionalPlugin.Services.ClauzeService.Load();
+            var tip = cfg.GetTipSelectat();
+            return tip != null
+                ? tip.Clauze.Where(c => c.Activ).ToList()
+                : new List<ClauzeActAditional>();
+        }
+
+        // ══════════════════════════════════════════════════════
+        //  GENERARE IN MASA
+        // ══════════════════════════════════════════════════════
+        internal void SetupBulkButton(Button btn)
+        {
+            // Butonul e creat in FormBase footer — il wireaza din afara
+            btn.Click += (s, e) => DoBulkGenerate();
+        }
+
+        private void DoBulkGenerate()
+        {
+            if (!ValidateForm()) return;
+            PopulateModel();
+            PopulateMentiuni();
+
+            if (!ActAditionalPlugin.Services.BulkContext.IsAvailable)
+            {
+                MessageBox.Show("Lista de angajați nu este disponibilă.", "Eroare",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            var ctx = ActAditionalPlugin.Services.BulkContext.Angajati;
+
+            // 1. Selectare angajati
+            List<AngajatPickerDialog.AngajatItem> selected;
+            using (var picker = new AngajatMultiPickerDialog(ctx))
+            {
+                if (picker.ShowDialog(this) != System.Windows.Forms.DialogResult.OK) return;
+                selected = picker.SelectedAngajati;
+            }
+            if (selected.Count == 0) return;
+
+            // 2. Pre-calculeaza codurile estimative
+            var svc = ActAditionalPlugin.Services.RegistraturaService.Instance;
+            DateTime docDate = GetRegistraturaDate();
+            string baseCode = svc.CalculateCod(docDate);
+            var parts = baseCode.Split('/');
+            string prefix = parts[0];
+            int baseNr = 0;
+            int.TryParse(parts.Length > 1 ? parts[1] : "1", out baseNr);
+
+            var rows = new List<BulkConfirmareDialog.BulkRow>();
+            for (int i = 0; i < selected.Count; i++)
+                rows.Add(new BulkConfirmareDialog.BulkRow
+                {
+                    Angajat = selected[i],
+                    CodEstimat = string.Format("{0}/{1}", prefix, baseNr + i)
+                });
+
+            // 3. Dialog confirmare cu preview coduri
+            using (var dlgConf = new BulkConfirmareDialog(rows, docDate, Theme))
+            {
+                if (dlgConf.ShowDialog(this) != System.Windows.Forms.DialogResult.Yes) return;
+            }
+
+            // 4. Generare efectiva
+            var rezultate = new List<BulkRezultateDialog.RezultatRow>();
+            string templatePath = GetTemplatePath();
+            int tipDocPK = ActAditionalPlugin.Services.RegistraturaService.GetTipDocPK(TipDocument.ActAditional);
+            string titlu = ActAditionalPlugin.Services.RegistraturaService.GetTitluDoc(TipDocument.ActAditional);
+
+            foreach (var ang in selected)
+            {
+                string cod = string.Empty;
+                try
+                {
+                    // Clonam modelul cu datele angajatului curent
+                    var m = CloneModelForAngajat(ang);
+
+                    // Inregistrare in registratura
+                    cod = svc.CalculateCod(docDate);
+                    svc.Inregistreaza(cod, docDate, tipDocPK, titlu, ang.PrsnId);
+                    m.CodInregistrare = cod;
+
+                    // Generare PDF
+                    ActAditionalPlugin.Services.TemplateEngine.GeneratePdf(m, templatePath);
+
+                    // Adauga in tabela CCCACTEADITIONALE
+                    if (ActAditionalPlugin.UI.DocumentFormBase.OnDocumentGenerated != null)
+                        ActAditionalPlugin.UI.DocumentFormBase.OnDocumentGenerated(m);
+
+                    rezultate.Add(new BulkRezultateDialog.RezultatRow
+                    {
+                        NumeAngajat = ang.Name,
+                        Success = true,
+                        Cod = cod,
+                        Mesaj = "Generat cu succes"
+                    });
+                }
+                catch (System.Exception ex)
+                {
+                    rezultate.Add(new BulkRezultateDialog.RezultatRow
+                    {
+                        NumeAngajat = ang.Name,
+                        Success = false,
+                        Cod = cod,
+                        Mesaj = ex.Message.Length > 80 ? ex.Message.Substring(0, 80) + "..." : ex.Message
+                    });
+                }
+            }
+
+            // 5. Dialog rezultate
+            using (var dlgRez = new BulkRezultateDialog(rezultate, Theme))
+                dlgRez.ShowDialog(this);
+        }
+
+        private ActAditionalModel CloneModelForAngajat(AngajatPickerDialog.AngajatItem ang)
+        {
+            var ctx = ActAditionalPlugin.Services.BulkContext.GetCimData;
+            var cim = ctx != null ? ctx(ang.PrsnId) : new ActAditionalPlugin.Services.ErpCimData();
+
+            var m = new ActAditionalModel();
+            // Date angajat
+            m.PrsnId = ang.PrsnId;
+            m.NumeSalariat = ang.Name;
+            m.CNP = ang.CNP;
+            m.Functie = ang.Functie;
+            m.NrCim = cim.NrCim;
+            m.DataCim = cim.DataCim;
+
+            // Date companie (identice pentru toți)
+            var comp = ActAditionalPlugin.Services.BulkContext.CompanyData;
+            if (comp != null) ApplyCompanyDataPublic(m, comp);
+
+            // Date document (identice)
+            m.DataEmitereAct = _aa.DataEmitereAct;
+            m.DataVigoare = _aa.DataVigoare;
+            m.MentiuniDocument = _aa.MentiuniDocument;
+            m.Modificari = _aa.Modificari; // aceleasi clauze
+            m.CodInregistrare = string.Empty;   // se va seta dupa Inregistreaza
+
+            return m;
+        }
+
+        private static void ApplyCompanyDataPublic(ActAditionalPlugin.Models.DocumentModelBase m,
+            ActAditionalPlugin.Services.ErpCompanyData c)
+        {
+            m.NumeAngajator = c.NumeAngajator;
+            m.CIFAngajator = c.CIFAngajator;
+            m.ReprezentantLegal = c.ReprezentantLegal;
+            m.AdresaCompanie = c.AdresaCompanie;
+            m.ZipCompanie = c.ZipCompanie;
+            m.NrRegComertului = c.NrRegComertului;
+            m.IbanCompanie = c.IbanCompanie;
+            m.NrTelefonCompanie = c.NrTelefonCompanie;
+            m.EmailCompanie = c.EmailCompanie;
+            m.WebsiteCompanie = c.WebsiteCompanie;
+        }
     }
 }

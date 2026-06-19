@@ -74,39 +74,37 @@ namespace ActAditionalPlugin
 
                 PdfSharp.Fonts.GlobalFontSettings.UseWindowsFontsUnderWindows = true;
                 RegistraturaService.Initialize(XSupport);
+
+                // Seteaza contextul pentru generare in masa (captureaza XSupport pe thread-ul TXCode)
+                BulkContext.Angajati = angajati;
+                BulkContext.CompanyData = companyData;
+                BulkContext.GetCimData = prsnId => ErpDataProvider.GetCimData(prsnId, XSupport);
+                BulkContext.GetAdresaPrimitor = prsnId => ReadAdresaPrimitor(prsnId, companyId);
                 var thread = new Thread(() =>
                 {
                     try
                     {
-                        // ── Pas 1: Selector angajat ───────────────────────
-                        using (var picker = new AngajatPickerDialog(angajati, prsn.PrsnId))
-                        {
-                            _activeForm = picker;
-                            if (picker.ShowDialog() != DialogResult.OK) return;
-                            _activeForm = null;
-
-                            // Daca s-a schimbat angajatul, reincarca datele
-                            if (picker.SelectedPrsnId != prsn.PrsnId)
-                            {
-                                prsn = new PrsnInfo
-                                {
-                                    PrsnId = picker.SelectedPrsnId,
-                                    NumeSalariat = picker.SelectedName,
-                                    CNP = picker.SelectedCNP,
-                                    Functie = picker.SelectedFunctie
-                                };
-                                cimData = ErpDataProvider.GetCimData(prsn.PrsnId, XSupport);
-                                adresaPrimitor = ReadAdresaPrimitor(prsn.PrsnId, companyId);
-                            }
-                        }
-
-                        // ── Pas 2: Selector tip document ─────────────────
+                        // ── Selector tip document (picker angajat integrat in header) ──
                         DocumentSelection selection;
-                        using (var selector = new SelectorDialog())
+                        using (var selector = new SelectorDialog(angajati, prsn.PrsnId))
                         {
                             _activeForm = selector;
                             if (selector.ShowDialog() != DialogResult.OK) return;
                             selection = selector.Selection;
+
+                            // Daca s-a schimbat angajatul in picker din header
+                            if (selector.SelectedPrsnId > 0 && selector.SelectedPrsnId != prsn.PrsnId)
+                            {
+                                prsn = new PrsnInfo
+                                {
+                                    PrsnId = selector.SelectedPrsnId,
+                                    NumeSalariat = selector.SelectedName,
+                                    CNP = selector.SelectedCNP,
+                                    Functie = selector.SelectedFunctie
+                                };
+                                cimData = ErpDataProvider.GetCimData(prsn.PrsnId, XSupport);
+                                adresaPrimitor = ReadAdresaPrimitor(prsn.PrsnId, companyId);
+                            }
                             _activeForm = null;
                         }
 
@@ -124,7 +122,7 @@ namespace ActAditionalPlugin
 
                                 if (result == DialogResult.Cancel)
                                 {
-                                    using (var selector2 = new SelectorDialog())
+                                    using (var selector2 = new SelectorDialog(angajati, prsn.PrsnId))
                                     {
                                         _activeForm = selector2;
                                         if (selector2.ShowDialog() != DialogResult.OK)
@@ -149,6 +147,7 @@ namespace ActAditionalPlugin
                     {
                         DocumentFormBase.OnDocumentGenerated = null;
                         _activeForm = null;
+                        BulkContext.Reset();
                         if (_mutex != null)
                         {
                             try { _mutex.ReleaseMutex(); } catch { }
@@ -495,6 +494,8 @@ namespace ActAditionalPlugin
                 if (model.DataVigoare != DateTime.MinValue)
                     SafeSetField(tbl, "CCCDATAVIGOARE", model.DataVigoare);
                 SafeSetField(tbl, "CCCDOCUMENTSTATUS", 1);
+                if (!string.IsNullOrWhiteSpace(model.MentiuniDocument))
+                    SafeSetField(tbl, "CCCACTOBS", model.MentiuniDocument);
                 tbl.Current.Post();
                 this.XModule.Exec("Button:Save");
             }
@@ -524,6 +525,8 @@ namespace ActAditionalPlugin
                 SafeSetField(tbl, "LINENUM", 1);
                 SafeSetField(tbl, "CCCSTATUS", 1);
                 SafeSetField(tbl, "CCCTIPDCZ", GetDecizieTipText(model.TipDocument));
+                if (!string.IsNullOrWhiteSpace(model.MentiuniDocument))
+                    SafeSetField(tbl, "CCCREMARKS", model.MentiuniDocument);
                 tbl.Current.Post();
                 this.XModule.Exec("Button:Save");
             }
