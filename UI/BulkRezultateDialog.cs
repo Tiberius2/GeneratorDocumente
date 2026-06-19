@@ -105,7 +105,7 @@ namespace ActAditionalPlugin.UI
                 Top = 8,
                 Anchor = AnchorStyles.Right | AnchorStyles.Top
             };
-            btnClose.FlatAppearance.BorderSize = 0;
+            btnClose.FlatAppearance.BorderSize = 2;
             btnClose.Click += (s, e) => Close();
             pnlFooter.Controls.Add(btnClose);
             pnlFooter.Resize += (s, e) => btnClose.Left = pnlFooter.Width - btnClose.Width - 16;

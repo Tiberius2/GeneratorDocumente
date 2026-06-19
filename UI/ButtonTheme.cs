@@ -29,7 +29,7 @@ namespace ActAditionalPlugin.UI
             }
             else
             {
-                btn.FlatAppearance.BorderSize = 1;
+                btn.FlatAppearance.BorderSize = 2;
                 btn.FlatAppearance.BorderColor = Border;
             }
             btn.MouseEnter += (s, e) => ((Button)s).BackColor = Hover;

@@ -18,6 +18,7 @@ namespace ActAditionalPlugin.UI
         private readonly List<PunctModificareControl> _puncte = new List<PunctModificareControl>();
         private List<ClauzeActAditional> _clauze;
 
+
         public ActAditionalForm(ActAditionalModel model)
             : base(model, "Act Adițional — CIM")
         {
@@ -84,7 +85,7 @@ namespace ActAditionalPlugin.UI
                 Anchor = AnchorStyles.Right | AnchorStyles.Top
             };
             ButtonPalettes.Primary.ApplyTo(btnAdd);
-            btnAdd.FlatAppearance.BorderSize = 0;
+            btnAdd.FlatAppearance.BorderSize = 3;
             btnAdd.Click += (s, e) => AddPunct();
 
             var btnEditorClauze = new Button
@@ -100,7 +101,7 @@ namespace ActAditionalPlugin.UI
                 ForeColor = Color.FromArgb(60, 40, 10),
                 Cursor = Cursors.Hand
             };
-            btnEditorClauze.FlatAppearance.BorderSize = 2;
+            btnEditorClauze.FlatAppearance.BorderSize = 3;
             btnEditorClauze.FlatAppearance.BorderColor = Color.FromArgb(240, 173, 78);
             btnEditorClauze.Click += (s, e) =>
             {
@@ -125,7 +126,7 @@ namespace ActAditionalPlugin.UI
                 ForeColor = Color.FromArgb(60, 40, 10),
                 Cursor = Cursors.Hand
             };
-            btnBulk.FlatAppearance.BorderSize = 0;
+            btnBulk.FlatAppearance.BorderSize = 3;
             btnBulk.Visible = false;
             btnBulk.Click += (s, e) => DoBulkGenerate();
 
@@ -193,6 +194,14 @@ namespace ActAditionalPlugin.UI
                 c.Width = w; c.Left = 0; c.Top = y;
                 y += c.Height + 6;
             }
+        }
+
+        protected override bool ValidateFormForPreview()
+        {
+            // Pentru preview permitem si fara modificari — se vede template-ul gol
+            if (!RequireText(_txtCodInregistrare, "Cod înregistrare")) return false;
+            if (!ValidateCodInregistrare(_txtCodInregistrare)) return false;
+            return true;
         }
 
         protected override bool ValidateForm()

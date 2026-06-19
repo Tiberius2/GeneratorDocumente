@@ -61,12 +61,42 @@ namespace ActAditionalPlugin.Properties {
         }
         
         /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap back_arrow {
+            get {
+                object obj = ResourceManager.GetObject("back-arrow", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized resource of type System.Byte[].
         /// </summary>
         internal static byte[] check_mark {
             get {
                 object obj = ResourceManager.GetObject("check-mark", resourceCulture);
                 return ((byte[])(obj));
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap documentOK {
+            get {
+                object obj = ResourceManager.GetObject("documentOK", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap refreshPreview {
+            get {
+                object obj = ResourceManager.GetObject("refreshPreview", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
             }
         }
     }

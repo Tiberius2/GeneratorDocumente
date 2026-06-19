@@ -215,9 +215,6 @@
     <Compile Include="UI\FormBase.cs">
       <SubType>Form</SubType>
     </Compile>
-    <Compile Include="UI\PdfPreviewForm.cs">
-      <SubType>Form</SubType>
-    </Compile>
     <Compile Include="UI\PunctmodificareControl.cs">
       <SubType>Component</SubType>
     </Compile>
@@ -251,9 +248,6 @@
     </EmbeddedResource>
     <EmbeddedResource Include="UI\EchipamentItemControl.resx">
       <DependentUpon>EchipamentItemControl.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="UI\PdfPreviewForm.resx">
-      <DependentUpon>PdfPreviewForm.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="UI\PvFormBase.resx">
       <DependentUpon>PvFormBase.cs</DependentUpon>

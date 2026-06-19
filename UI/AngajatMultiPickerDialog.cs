@@ -134,7 +134,7 @@ namespace ActAditionalPlugin.UI
                 Enabled = false,
                 Anchor = AnchorStyles.Right | AnchorStyles.Top
             };
-            _btnOk.FlatAppearance.BorderSize = 0;
+            _btnOk.FlatAppearance.BorderSize = 2;
             _btnOk.Click += (s, e) => Confirma();
 
             var btnCancel = new Button
@@ -148,7 +148,7 @@ namespace ActAditionalPlugin.UI
                 Top = 8,
                 Anchor = AnchorStyles.Right | AnchorStyles.Top
             };
-            btnCancel.FlatAppearance.BorderSize = 0;
+            btnCancel.FlatAppearance.BorderSize = 2;
             btnCancel.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
 
             pnlFooter.Controls.AddRange(new Control[] { _btnOk, btnCancel });
@@ -214,7 +214,7 @@ namespace ActAditionalPlugin.UI
                 Font = new Font("Segoe UI", 8.5f),
                 Cursor = Cursors.Hand
             };
-            b.FlatAppearance.BorderSize = 0;
+            b.FlatAppearance.BorderSize = 2;
             return b;
         }
 

@@ -137,7 +137,7 @@ namespace ActAditionalPlugin.UI
                 Top = 10,
                 Anchor = AnchorStyles.Right | AnchorStyles.Top
             };
-            btnDa.FlatAppearance.BorderSize = 0;
+            btnDa.FlatAppearance.BorderSize = 2;
             btnDa.MouseEnter += (s, e) => btnDa.BackColor = theme.AccentDark;
             btnDa.MouseLeave += (s, e) => btnDa.BackColor = theme.Accent;
             btnDa.Click += (s, e) => { Confirmed = true; DialogResult = DialogResult.Yes; Close(); };
@@ -154,7 +154,7 @@ namespace ActAditionalPlugin.UI
                 Top = 10,
                 Anchor = AnchorStyles.Right | AnchorStyles.Top
             };
-            btnNu.FlatAppearance.BorderSize = 1;
+            btnNu.FlatAppearance.BorderSize = 2;
             btnNu.FlatAppearance.BorderColor = Color.FromArgb(200, 210, 225);
             btnNu.Click += (s, e) => { DialogResult = DialogResult.No; Close(); };
 

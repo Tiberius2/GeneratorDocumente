@@ -107,7 +107,7 @@ namespace ActAditionalPlugin.UI
             // Butoane reordonare (sus/jos)
             var btnUp = new Button { Text = "▲", Width = 28, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(240, 242, 246), ForeColor = Color.FromArgb(60, 80, 110), Dock = DockStyle.Top, Height = 28, Cursor = Cursors.Hand };
             var btnDown = new Button { Text = "▼", Width = 28, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(240, 242, 246), ForeColor = Color.FromArgb(60, 80, 110), Dock = DockStyle.Top, Height = 28, Cursor = Cursors.Hand };
-            btnUp.FlatAppearance.BorderSize = 0; btnDown.FlatAppearance.BorderSize = 0;
+            btnUp.FlatAppearance.BorderSize = 2; btnDown.FlatAppearance.BorderSize = 2;
             btnUp.Click += (s, e) =>
             {
                 if (_selectedTip == null) return;
@@ -408,7 +408,7 @@ namespace ActAditionalPlugin.UI
         private static Button MakeBtn(string text, Color bg, int w)
         {
             var b = new Button { Text = text, Height = 28, Width = w, FlatStyle = FlatStyle.Flat, BackColor = bg, ForeColor = Color.White, Font = new Font("Segoe UI", 8.5f, FontStyle.Bold), Cursor = Cursors.Hand };
-            b.FlatAppearance.BorderSize = 0; return b;
+            b.FlatAppearance.BorderSize = 2; return b;
         }
 
         private static string NormalizeTip(string tip)

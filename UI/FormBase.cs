@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using System.Windows.Forms;
 using ActAditionalPlugin.Models;
 using ActAditionalPlugin.Services;
+using PdfiumViewer;
 
 namespace ActAditionalPlugin.UI
 {
@@ -14,6 +15,13 @@ namespace ActAditionalPlugin.UI
         protected readonly DocumentTheme Theme;
         protected string _codGenerat = string.Empty;
         protected string _titluDocGenerat = string.Empty;
+
+        // ── Split layout (40/60) ──────────────────────────────
+        private PdfViewer _splitPdfViewer;
+        private string _splitCurrentPdfPath;
+        private Label _splitPlaceholder;
+        private bool _splitPreviewDone;
+        private Button _btnActualizeaza;
 
         protected static readonly Color TextPrincipal = Color.FromArgb(25, 35, 55);
         protected static readonly Color TextSecundar = Color.FromArgb(80, 100, 130);
@@ -46,8 +54,12 @@ namespace ActAditionalPlugin.UI
         }
 
         // ── Shell ─────────────────────────────────────────────
-        private void BuildShell(string titlu)
+        private void BuildShell(string titlu) => BuildShellSplit(titlu);
+
+        // ── Shell split 40/60 ─────────────────────────────────
+        private void BuildShellSplit(string titlu)
         {
+            // ── Header global ──────────────────────────────────
             var pnlTitlu = new Panel { Dock = DockStyle.Top, Height = 50, BackColor = Theme.Accent };
             pnlTitlu.Controls.Add(new Label
             {
@@ -58,115 +70,286 @@ namespace ActAditionalPlugin.UI
                 Location = new Point(18, 12)
             });
 
+            // ── SplitContainer principal ───────────────────────
+            var split = new SplitContainer
+            {
+                Dock = DockStyle.Fill,
+                Orientation = Orientation.Vertical,
+                FixedPanel = FixedPanel.Panel1,
+                IsSplitterFixed = true,
+                BackColor = Color.FromArgb(210, 220, 235),
+                SplitterWidth = 3
+            };
+
+            // ── STÂNGA: sidebar formular ───────────────────────
+            // Footer sidebar (static, nu scrolleaza)
+            var pnlSideFooter = new Panel
+            {
+                Dock = DockStyle.Bottom,
+                Height = 56,
+                BackColor = Color.White
+            };
+            pnlSideFooter.Paint += (s, e) =>
+            {
+                using (var p = new Pen(Theme.AccentBorder))
+                    e.Graphics.DrawLine(p, 0, 0, pnlSideFooter.Width, 0);
+            };
+
+            var btnInapoi = new Button
+            {
+                Text = "  Anulare",
+                Height = 36,
+                Width = 130,
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(255, 220, 220),
+                ForeColor = Color.FromArgb(160, 40, 40),
+                Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+                Cursor = Cursors.Hand,
+                Top = 10,
+                Left = 12,
+                Anchor = AnchorStyles.Left | AnchorStyles.Top,
+                Image = ResizeImage(ActAditionalPlugin.Properties.Resources.back_arrow, 20, 20),
+                ImageAlign = System.Drawing.ContentAlignment.MiddleCenter,
+                TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
+                TextImageRelation = TextImageRelation.ImageBeforeText,
+                Padding = new Padding(0),
+                AutoSize = false
+            };
+            btnInapoi.FlatAppearance.BorderSize = 1;
+            btnInapoi.FlatAppearance.BorderColor = Color.FromArgb(220, 150, 150);
+            btnInapoi.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
+            pnlSideFooter.Controls.Add(btnInapoi);
+
+            var btnActualizeaza = new Button
+            {
+                Text = "  Previzualizează",
+                Height = 36,
+                Width = 220,
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(255, 243, 176),
+                ForeColor = Color.FromArgb(120, 90, 10),
+                Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+                Cursor = Cursors.Hand,
+                Top = 10,
+                Anchor = AnchorStyles.Right | AnchorStyles.Top,
+                Image = ResizeImage(ActAditionalPlugin.Properties.Resources.refreshPreview, 20, 20),
+                ImageAlign = System.Drawing.ContentAlignment.MiddleCenter,
+                TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
+                TextImageRelation = TextImageRelation.ImageBeforeText,
+                Padding = new Padding(0),
+                AutoSize = false
+            };
+            btnActualizeaza.FlatAppearance.BorderSize = 3;
+            btnActualizeaza.FlatAppearance.BorderColor = Color.FromArgb(240, 200, 80);
+            btnActualizeaza.Click += BtnActualizeazaPreview_Click;
+            _btnActualizeaza = btnActualizeaza;
+
+            var btnGenereaza = new Button
+            {
+                Text = "  Generează PDF",
+                Height = 36,
+                Width = 180,
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Theme.Accent,
+                ForeColor = Color.White,
+                Font = new Font("Segoe UI", 10f, FontStyle.Bold),
+                Cursor = Cursors.Hand,
+                Top = 10,
+                Anchor = AnchorStyles.Right | AnchorStyles.Top,
+                Image = ResizeImage(ActAditionalPlugin.Properties.Resources.documentOK, 20, 20),
+                ImageAlign = System.Drawing.ContentAlignment.MiddleCenter,
+                TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
+                TextImageRelation = TextImageRelation.ImageBeforeText,
+                Padding = new Padding(0),
+                AutoSize = false
+            };
+            btnGenereaza.FlatAppearance.BorderSize = 3;
+            btnGenereaza.FlatAppearance.BorderColor = Theme.AccentDark;
+            btnGenereaza.MouseEnter += (s, e) => btnGenereaza.BackColor = Theme.AccentDark;
+            btnGenereaza.MouseLeave += (s, e) => btnGenereaza.BackColor = Theme.Accent;
+            btnGenereaza.Click += BtnGenereazaSplit_Click;
+
+            pnlSideFooter.Controls.AddRange(new Control[] { btnActualizeaza, btnGenereaza });
+
+            // Ambele butoane ancorate dreapta, unul langa altul
+            Action reposBtns = () =>
+            {
+                btnGenereaza.Left = pnlSideFooter.Width - btnGenereaza.Width - 12;
+                btnActualizeaza.Left = btnGenereaza.Left - btnActualizeaza.Width - 10;
+                if (BulkButton != null && BulkButton.Visible)
+                    BulkButton.Left = btnActualizeaza.Left - BulkButton.Width - 8;
+            };
+            pnlSideFooter.Resize += (s, e) => reposBtns();
+            reposBtns();
+
+            // BulkButton în sidebar footer
+            var btnBulk = new Button
+            {
+                Text = "⊕ Masă",
+                Height = 36,
+                Width = 90,
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(240, 173, 78),
+                ForeColor = Color.FromArgb(60, 40, 10),
+                Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
+                Cursor = Cursors.Hand,
+                Top = 10,
+                Visible = false,
+                Anchor = AnchorStyles.Right | AnchorStyles.Top
+            };
+            btnBulk.FlatAppearance.BorderSize = 3;
+            pnlSideFooter.Controls.Add(btnBulk);
+            BulkButton = btnBulk;
+
+            // Sectiunea angajat in sidebar
+            var pnlAngajat = BuildAngajatSection();
+
+            // PnlBody = zona scrollabila din sidebar
             PnlBody = new Panel
             {
                 Dock = DockStyle.Fill,
                 AutoScroll = true,
-                Padding = new Padding(16, 10, 16, 10),
+                Padding = new Padding(12, 8, 12, 8),
                 BackColor = FundalForm
             };
 
-            var pnlFooter = new Panel { Dock = DockStyle.Bottom, Height = 56, BackColor = Color.White };
-            pnlFooter.Paint += (s, e) =>
-            {
-                using (var p = new Pen(Theme.AccentBorder))
-                    e.Graphics.DrawLine(p, 0, 0, pnlFooter.Width, 0);
-            };
+            split.Panel1.Controls.Add(PnlBody);
+            split.Panel1.Controls.Add(pnlAngajat);
+            split.Panel1.Controls.Add(pnlSideFooter);
 
-            // Buton Genereaza PDF
-            var btnGen = new Button
+            // ── DREAPTA: zona preview ──────────────────────────
+            split.Panel2.BackColor = Color.FromArgb(230, 232, 238);
+
+            // Placeholder — dock fill, vizibil initial
+            var lblPlaceholder = new Label
             {
-                Text = "▶ Previzualizeaza si Genereaza ◀",
-                Size = new Size(252, 40),
-                FlatStyle = FlatStyle.Popup,
-                BackColor = Theme.Accent,
-                ForeColor = Color.White,
-                Font = new Font("Segoe UI", 10.5f, FontStyle.Bold),
-                Cursor = Cursors.Hand,
-                Top = 8,
-                Anchor = AnchorStyles.Right | AnchorStyles.Top,
+                Text = "↺  Apasă «Actualizează previzualizare» pentru a vedea documentul",
+                Font = new Font("Segoe UI", 11f, FontStyle.Regular),
+                ForeColor = Color.FromArgb(150, 160, 180),
                 AutoSize = false,
-                TextAlign = System.Drawing.ContentAlignment.MiddleCenter
+                TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
+                Dock = DockStyle.Fill,
+                BackColor = Color.FromArgb(230, 232, 238)
             };
-            btnGen.MouseEnter += (s, e) => btnGen.BackColor = Theme.AccentDark;
-            btnGen.MouseLeave += (s, e) => btnGen.BackColor = Theme.Accent;
-            btnGen.Click += BtnPreview_Click;
 
-            // Buton Previzualizare — tematizat, iconica diferita
-
-            var btnInapoi = new Button
+            // PdfViewer — dock fill, ascuns initial
+            _splitPdfViewer = new PdfViewer
             {
-                Text = "← Înapoi",
-                Size = new Size(120, 36),
-                FlatStyle = FlatStyle.Flat,
-                BackColor = Color.FromArgb(240, 242, 246),
-                ForeColor = Color.FromArgb(60, 80, 110),
-                Font = new Font("Segoe UI", 10f),
-                Cursor = Cursors.Hand,
-                Top = 10,
-                Left = 18,
-                Anchor = AnchorStyles.Left | AnchorStyles.Top
+                Dock = DockStyle.Fill,
+                BackColor = Color.FromArgb(230, 232, 238),
+                ShowToolbar = true,
+                ShowBookmarks = false,
+                Visible = false
             };
-            btnInapoi.FlatAppearance.BorderSize = 1;
-            btnInapoi.FlatAppearance.BorderColor = Color.FromArgb(200, 210, 225);
-            btnInapoi.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
 
-            pnlFooter.Controls.AddRange(new Control[] { btnGen, btnInapoi });
+            // Ordinea adaugarii conteaza: primul adaugat = in spate
+            // Vrem: lblPlaceholder in fata initial, _splitPdfViewer in spate
+            // Cand viewer-ul devine Visible=true, il aducem in fata cu BringToFront()
+            split.Panel2.Controls.Add(_splitPdfViewer);
+            split.Panel2.Controls.Add(lblPlaceholder);
 
-            // Buton generare in masa — activat de subclase (ActAditionalForm)
-            var btnBulk = new Button
-            {
-                Text = "⊕ Generare în masă",
-                Height = 38,
-                Width = 180,
-                FlatStyle = FlatStyle.Flat,
-                BackColor = Color.FromArgb(240, 173, 78),
-                ForeColor = Color.FromArgb(60, 40, 10),
-                Font = new Font("Segoe UI", 9f, FontStyle.Bold),
-                Cursor = Cursors.Hand,
-                Top = 9,
-                Visible = false,
-                Anchor = AnchorStyles.Right | AnchorStyles.Top
-            };
-            btnBulk.FlatAppearance.BorderSize = 0;
-            pnlFooter.Controls.Add(btnBulk);
-            BulkButton = btnBulk;
+            // Salvam referinta la placeholder ca sa-l ascundem la prima previzualizare
+            _splitPlaceholder = lblPlaceholder;
 
-            pnlFooter.Resize += (s, e) =>
-            {
-                btnGen.Left = pnlFooter.Width - btnGen.Width - 18;
-                if (BulkButton != null && BulkButton.Visible)
-                    BulkButton.Left = btnGen.Left - BulkButton.Width - 10;
-            };
-            btnGen.Left = 680;
-
-            var pnlAngajat = BuildAngajatSection();
-            Controls.Add(PnlBody);
-            Controls.Add(pnlAngajat);
+            // ── Asamblare forma ────────────────────────────────
+            Controls.Add(split);
             Controls.Add(pnlTitlu);
-            Controls.Add(pnlFooter);
-            Shown += (s, e) => { ActiveControl = null; };
+
+            // Setam splitter dupa ce forma e vizibila
+            Shown += (s, e) =>
+            {
+                split.SplitterDistance = (int)(split.Width * 0.40);
+                ActiveControl = null;
+            };
+            ResizeEnd += (s, e) =>
+            {
+                // Mentin proportia 40% la resize manual
+                if (split.Width > 0)
+                    split.SplitterDistance = (int)(split.Width * 0.40);
+            };
+            FormClosed += (s, e) =>
+            {
+                try { _splitPdfViewer?.Document?.Dispose(); } catch { }
+                if (!string.IsNullOrEmpty(_splitCurrentPdfPath) && File.Exists(_splitCurrentPdfPath))
+                    try { File.Delete(_splitCurrentPdfPath); } catch { }
+            };
         }
 
-        // ── PDF flow ──────────────────────────────────────────
-        private void BtnGenPdf_Click(object sender, EventArgs e)
+        // ── Split layout handlers ──────────────────────────────
+        private void BtnActualizeazaPreview_Click(object sender, EventArgs e)
+        {
+            if (!ValidateFormForPreview()) return;
+            PopulateModel();
+            PopulateMentiuni();
+            string tpl = GetTemplatePath();
+            if (!File.Exists(tpl)) { ShowError("Template-ul nu a fost găsit:\n" + tpl); return; }
+
+            // Cursor de asteptare
+            Cursor = Cursors.WaitCursor;
+            try
+            {
+                // 1. Inchidem document-ul curent din viewer INAINTE de a genera noul PDF
+                //    (PdfiumViewer tine fisierul blocat cat timp e incarcat)
+                if (_splitPdfViewer != null && _splitPdfViewer.Document != null)
+                {
+                    _splitPdfViewer.Document.Dispose();
+                    _splitPdfViewer.Document = null;
+                }
+
+                // 2. Stergem temp-ul vechi daca exista
+                if (!string.IsNullOrEmpty(_splitCurrentPdfPath) && File.Exists(_splitCurrentPdfPath))
+                {
+                    try { File.Delete(_splitCurrentPdfPath); } catch { }
+                }
+                _splitCurrentPdfPath = null;
+
+                // 3. Generam noul PDF temp
+                string tempPdf = GenerateTempPdf(tpl);
+                _splitCurrentPdfPath = tempPdf;
+
+                // 4. Incarcam in viewer
+                if (_splitPdfViewer != null)
+                {
+                    _splitPdfViewer.Document = PdfDocument.Load(tempPdf);
+                    _splitPdfViewer.Visible = true;
+                    _splitPdfViewer.BringToFront();
+                    if (_splitPlaceholder != null) _splitPlaceholder.Visible = false;
+                    if (!_splitPreviewDone)
+                    {
+                        _splitPreviewDone = true;
+                        if (_btnActualizeaza != null)
+                            _btnActualizeaza.Text = "  Actualizează";
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                ShowError("Eroare la previzualizare:\n" + ex.Message + "\n\n" + ex.GetType().Name);
+            }
+            finally
+            {
+                Cursor = Cursors.Default;
+            }
+        }
+
+        private void BtnGenereazaSplit_Click(object sender, EventArgs e)
         {
             if (!ValidateForm()) return;
             PopulateModel();
             PopulateMentiuni();
-            if (!OnBeforeGenerate()) return;            // confirmare + inregistrare registratura
             string tpl = GetTemplatePath();
             if (!File.Exists(tpl)) { ShowError("Template-ul nu a fost găsit:\n" + tpl); return; }
             try
             {
+                if (!OnBeforeGenerate()) return;
                 string pdf = DoGenerateFinalPdf(tpl);
                 OnAfterGenerate();
-                DialogResult = DialogResult.OK;
-                Close();
+                ShowSuccessAndClose();
             }
             catch (Exception ex) { ShowError("Eroare la generare PDF:\n" + ex.Message); }
         }
 
+        // ── PDF flow (classic) ────────────────────────────────
         private void ShowSuccessAndClose()
         {
             var data = ActAditionalPlugin.Services.RegistraturaService.Instance != null
@@ -178,52 +361,17 @@ namespace ActAditionalPlugin.UI
             Close();
         }
 
-        private void BtnPreview_Click(object sender, EventArgs e)
-        {
-            if (!ValidateForm()) return;
-            PopulateModel();
-            PopulateMentiuni();
-            string tpl = GetTemplatePath();
-            if (!File.Exists(tpl)) { ShowError("Template-ul nu a fost găsit:\n" + tpl); return; }
-            try
-            {
-                string tempPdf = GenerateTempPdf(tpl);
-                using (var dlg = new PdfPreviewForm(tempPdf, Theme, deletePdfOnClose: true))
-                {
-                    dlg.ShowDialog(this);
-                    if (dlg.UserConfirmed)
-                    {
-                        if (!OnBeforeGenerate()) return;   // confirmare + inregistrare registratura
-                        string pdf = DoGenerateFinalPdf(tpl);
-                        OnAfterGenerate();
-                        ShowSuccessAndClose();
-                    }
-                }
-            }
-            catch (Exception ex) { ShowError("Eroare la previzualizare:\n" + ex.Message); }
-        }
-
-        private string GenerateTempPdf(string templatePath)
-        {
-            string tempDocx = Path.Combine(Path.GetTempPath(),
-                string.Format("preview_{0}.docx", GetType().Name));
-            string tempPdf = Path.ChangeExtension(tempDocx, ".pdf");
-            try
-            {
-                File.Copy(templatePath, tempDocx, true);
-                FillDocxTemplate(tempDocx);
-                WordHelper.ConvertToPdf(tempDocx, tempPdf);
-            }
-            finally { if (File.Exists(tempDocx)) File.Delete(tempDocx); }
-            return tempPdf;
-        }
-
         private static void ShowError(string msg)
             => MessageBox.Show(msg, "Eroare", MessageBoxButtons.OK, MessageBoxIcon.Error);
 
         // ── Abstract / Virtual ─────────────────────────────────
         protected abstract Panel BuildAngajatSection();
         protected abstract bool ValidateForm();
+        /// <summary>
+        /// Validare minima pentru preview — by default identica cu ValidateForm().
+        /// Subclasele pot override-ui pentru a permite preview fara toate campurile completate.
+        /// </summary>
+        protected virtual bool ValidateFormForPreview() => ValidateForm();
         protected abstract void PopulateModel();
         protected abstract string GetTemplatePath();
         protected abstract void FillDocxTemplate(string docxPath);
@@ -360,8 +508,20 @@ namespace ActAditionalPlugin.UI
             return tb;
         }
 
-        protected static TextBox MakeMultiline(int height = 60)
-            => new TextBox { Multiline = true, Height = height, BackColor = Color.White, ForeColor = TextPrincipal, Font = FInput, BorderStyle = BorderStyle.FixedSingle, ScrollBars = ScrollBars.Vertical };
+        protected TextBox MakeMultiline(int height = 60)
+        {
+            var tb = new TextBox { Multiline = true, Height = height, BackColor = Color.White, ForeColor = TextPrincipal, Font = FInput, BorderStyle = BorderStyle.FixedSingle, ScrollBars = ScrollBars.Vertical };
+            tb.MouseWheel += (s, e) =>
+            {
+                if (PnlBody != null)
+                {
+                    var delta = -(e.Delta / 120) * SystemInformation.MouseWheelScrollLines * 16;
+                    PnlBody.AutoScrollPosition = new System.Drawing.Point(0, Math.Max(0, -PnlBody.AutoScrollPosition.Y + delta));
+                    ((HandledMouseEventArgs)e).Handled = true;
+                }
+            };
+            return tb;
+        }
 
         protected static DateTimePicker MakeDtp()
             => new DateTimePicker { Format = DateTimePickerFormat.Short, Value = DateTime.Today, Font = FInput, Height = 26 };
@@ -378,6 +538,32 @@ namespace ActAditionalPlugin.UI
             tb.Font = new Font(FInput, FontStyle.Regular);
             tb.GotFocus += (s, e) => { if (tb.ForeColor == Color.Gray) { tb.Text = string.Empty; tb.ForeColor = TextPrincipal; tb.Font = FInput; } };
             tb.LostFocus += (s, e) => { if (string.IsNullOrWhiteSpace(tb.Text)) { tb.Text = ph; tb.ForeColor = Color.Gray; tb.Font = new Font(FInput, FontStyle.Regular); } };
+        }
+
+        private static System.Drawing.Image ResizeImage(System.Drawing.Image img, int w, int h)
+        {
+            var bmp = new System.Drawing.Bitmap(w, h);
+            using (var g = System.Drawing.Graphics.FromImage(bmp))
+            {
+                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                g.DrawImage(img, 0, 0, w, h);
+            }
+            return bmp;
+        }
+
+        private string GenerateTempPdf(string templatePath)
+        {
+            string tempDocx = Path.Combine(Path.GetTempPath(),
+                string.Format("preview_{0}.docx", GetType().Name));
+            string tempPdf = Path.ChangeExtension(tempDocx, ".pdf");
+            try
+            {
+                File.Copy(templatePath, tempDocx, true);
+                FillDocxTemplate(tempDocx);
+                WordHelper.ConvertToPdf(tempDocx, tempPdf);
+            }
+            finally { if (File.Exists(tempDocx)) File.Delete(tempDocx); }
+            return tempPdf;
         }
 
         protected static string GetText(TextBox tb) => tb.ForeColor == Color.Gray ? string.Empty : tb.Text.Trim();

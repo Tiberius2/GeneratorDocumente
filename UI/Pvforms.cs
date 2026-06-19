@@ -86,7 +86,7 @@ namespace ActAditionalPlugin.UI
                 Anchor = AnchorStyles.Right | AnchorStyles.Top
             };
             ButtonPalettes.Primary.ApplyTo(btnAdd);
-            btnAdd.FlatAppearance.BorderSize = 0;
+            btnAdd.FlatAppearance.BorderSize = 3;
             btnAdd.Click += (s, e) => AddItem();
 
             pnlHeader.Controls.Add(btnAdd);
@@ -155,6 +155,13 @@ namespace ActAditionalPlugin.UI
             for (int i = 0; i < _items.Count; i++)
                 if (!_items[i].IsValid())
                 { MessageBox.Show(string.Format("Echipamentul {0} nu are denumire completată.", i + 1), "Validare", MessageBoxButtons.OK, MessageBoxIcon.Warning); return false; }
+            return true;
+        }
+
+        protected override bool ValidateFormForPreview()
+        {
+            if (!RequireText(_txtCod, "Cod înregistrare")) return false;
+            if (!ValidateCodInregistrare(_txtCod)) return false;
             return true;
         }
 

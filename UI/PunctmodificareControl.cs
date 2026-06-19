@@ -118,7 +118,7 @@ namespace ActAditionalPlugin.UI
                 Cursor = Cursors.Hand,
                 Font = new Font("Segoe UI", 9f, FontStyle.Bold)
             };
-            _btnDelete.FlatAppearance.BorderSize = 0;
+            _btnDelete.FlatAppearance.BorderSize = 2;
             _btnDelete.Click += (s, e) => { if (OnDelete != null) OnDelete(); };
 
             _pnlCampuri = new Panel { Height = 0, BackColor = Color.White };
@@ -143,7 +143,7 @@ namespace ActAditionalPlugin.UI
             _btnEdit = new Button
             {
                 Text = "✎ Editează",
-                Height = 24,
+                Height = 30,
                 Width = 90,
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Color.White,
@@ -151,7 +151,7 @@ namespace ActAditionalPlugin.UI
                 Font = new Font("Segoe UI", 8f),
                 Cursor = Cursors.Hand
             };
-            _btnEdit.FlatAppearance.BorderSize = 1;
+            _btnEdit.FlatAppearance.BorderSize = 2;
             _btnEdit.FlatAppearance.BorderColor = Albastru;
             _btnEdit.Click += BtnEdit_Click;
             _pnlPreview.Controls.AddRange(new Control[] { _lblPreviewRef, _lblPreviewText, _btnEdit });
@@ -175,10 +175,10 @@ namespace ActAditionalPlugin.UI
 
             var pnlBtns = new FlowLayoutPanel { FlowDirection = FlowDirection.RightToLeft, AutoSize = true, BackColor = Color.Transparent, Margin = new Padding(0) };
             var btnCancel = new Button { Text = "Anulează", Height = 26, Width = 80, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(240, 242, 246), ForeColor = TextSecundar, Font = new Font("Segoe UI", 8.5f), Cursor = Cursors.Hand, Margin = new Padding(4, 0, 0, 0) };
-            btnCancel.FlatAppearance.BorderSize = 0;
+            btnCancel.FlatAppearance.BorderSize = 2;
             btnCancel.Click += (s, e) => { _manuallyEdited = false; _pnlEdit.Visible = false; _pnlEdit.Height = 0; RepositionAll(); };
             var btnSave = new Button { Text = "✓ Salvează", Height = 26, Width = 100, FlatStyle = FlatStyle.Flat, BackColor = Verde, ForeColor = Color.White, Font = new Font("Segoe UI", 8.5f, FontStyle.Bold), Cursor = Cursors.Hand, Margin = new Padding(0) };
-            btnSave.FlatAppearance.BorderSize = 0;
+            btnSave.FlatAppearance.BorderSize = 2;
             btnSave.Click += (s, e) => { _manuallyEdited = true; _pnlEdit.Visible = false; _pnlEdit.Height = 0; UpdatePreview(_txtEditRef.Text.Trim(), _txtEditText.Text.Trim()); RepositionAll(); };
             pnlBtns.Controls.Add(btnCancel);
             pnlBtns.Controls.Add(btnSave);

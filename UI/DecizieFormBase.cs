@@ -48,6 +48,8 @@ namespace ActAditionalPlugin.UI
             if (!ValidateCodInregistrare(TxtCodInregistrare)) return false;
             return true;
         }
+
+        protected override bool ValidateFormForPreview() => ValidateDecizie();
     }
 
     public abstract class DecizieCuCerereBase : DecizieFormBase

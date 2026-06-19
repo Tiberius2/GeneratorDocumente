@@ -205,7 +205,7 @@ namespace ActAditionalPlugin.UI
                 Enabled = false,
                 Top = 10
             };
-            _btnContinua.FlatAppearance.BorderSize = 0;
+            _btnContinua.FlatAppearance.BorderSize = 2;
             _btnContinua.MouseEnter += (s, e) => { if (_btnContinua.Enabled) _btnContinua.BackColor = ButtonPalettes.Primary.Hover; };
             _btnContinua.MouseLeave += (s, e) => { if (_btnContinua.Enabled) _btnContinua.BackColor = ButtonPalettes.Primary.Background; };
             _btnContinua.Click += (s, e) => Confirma();
@@ -381,7 +381,7 @@ namespace ActAditionalPlugin.UI
                 Tag = index
             };
             btn.FlatAppearance.BorderColor = theme.AccentBorder;
-            btn.FlatAppearance.BorderSize = 1;
+            btn.FlatAppearance.BorderSize = 2;
             btn.Paint += (s, e) => DrawCard(e.Graphics, btn, titlu, sub, theme);
             btn.Click += CardClick;
             btn.MouseEnter += (s, e) => { if ((int)btn.Tag != _selectedIndex) { btn.BackColor = theme.AccentPal; btn.Invalidate(); } };
