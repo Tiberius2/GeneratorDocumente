@@ -66,6 +66,14 @@ namespace ActAditionalPlugin.UI
              "Perioadă de probă", "Art. 31 alin. 3-4 Codul Muncii",
              new DocSelection(TipDocument.IncetarePerioadaProba), DocumentTheme.Incetare),
 
+            // Referate
+            ("REFERATE",
+             "Referat disciplinar", "Sesizare abatere disciplinară",
+             new DocSelection(TipDocument.ReferatDisciplinar), DocumentTheme.Incetare),
+            ("REFERATE",
+             "Avertisment disciplinar", "Decizie sancţionare disciplinară",
+             new DocSelection(TipDocument.AvertismentDisciplinar), DocumentTheme.Incetare),
+
             // Procese Verbale
             ("PROCESE VERBALE",
              "Echipamente", "Uniformă, unelte, echipament de protecție",
@@ -137,7 +145,7 @@ namespace ActAditionalPlugin.UI
                 Cursor = Cursors.Hand,
                 Anchor = AnchorStyles.Left | AnchorStyles.Top
             };
-            _btnAngajat.FlatAppearance.BorderSize = 2;
+            _btnAngajat.FlatAppearance.BorderSize = 3;
             _btnAngajat.FlatAppearance.BorderColor = Color.FromArgb(233, 239, 247);
             _btnAngajat.Click += BtnAngajat_Click;
             pnlHeader.Controls.Add(_btnAngajat);
@@ -205,7 +213,7 @@ namespace ActAditionalPlugin.UI
                 Enabled = false,
                 Top = 10
             };
-            _btnContinua.FlatAppearance.BorderSize = 2;
+            _btnContinua.FlatAppearance.BorderSize = 3;
             _btnContinua.MouseEnter += (s, e) => { if (_btnContinua.Enabled) _btnContinua.BackColor = ButtonPalettes.Primary.Hover; };
             _btnContinua.MouseLeave += (s, e) => { if (_btnContinua.Enabled) _btnContinua.BackColor = ButtonPalettes.Primary.Background; };
             _btnContinua.Click += (s, e) => Confirma();
@@ -381,7 +389,7 @@ namespace ActAditionalPlugin.UI
                 Tag = index
             };
             btn.FlatAppearance.BorderColor = theme.AccentBorder;
-            btn.FlatAppearance.BorderSize = 2;
+            btn.FlatAppearance.BorderSize = 3;
             btn.Paint += (s, e) => DrawCard(e.Graphics, btn, titlu, sub, theme);
             btn.Click += CardClick;
             btn.MouseEnter += (s, e) => { if ((int)btn.Tag != _selectedIndex) { btn.BackColor = theme.AccentPal; btn.Invalidate(); } };

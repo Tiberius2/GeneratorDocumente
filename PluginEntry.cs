@@ -80,6 +80,7 @@ namespace ActAditionalPlugin
                 BulkContext.CompanyData = companyData;
                 BulkContext.GetCimData = prsnId => ErpDataProvider.GetCimData(prsnId, XSupport);
                 BulkContext.GetAdresaPrimitor = prsnId => ReadAdresaPrimitor(prsnId, companyId);
+                BulkContext.XSupport = XSupport;
                 var thread = new Thread(() =>
                 {
                     try
@@ -120,7 +121,7 @@ namespace ActAditionalPlugin
                                 var result = form.ShowDialog();
                                 _activeForm = null;
 
-                                if (result == DialogResult.Cancel)
+                                if (result == DialogResult.Cancel || result == DialogResult.OK)
                                 {
                                     using (var selector2 = new SelectorDialog(angajati, prsn.PrsnId))
                                     {
@@ -209,6 +210,8 @@ namespace ActAditionalPlugin
                 case TipDocument.IncetareExpirare: m = new IncetareExpirareModel(); break;
                 case TipDocument.IncetareDisciplinar: m = new IncetareDisciplinarModel(); break;
                 case TipDocument.IncetarePerioadaProba: m = new IncetarePerioadaProbaModel(); break;
+                case TipDocument.ReferatDisciplinar: m = new ReferatDisciplinarModel(); break;
+                case TipDocument.AvertismentDisciplinar: m = new AvertismentDisciplinarModel(); break;
                 default: m = new ActAditionalModel(); break;
             }
 
@@ -218,6 +221,7 @@ namespace ActAditionalPlugin
             m.Functie = prsn.Functie;
             m.NrCim = cimData.NrCim;
             m.DataCim = cimData.DataCim;
+            m.NumeDepartament = cimData.NumeDepartament;
             ApplyCompanyData(m, companyData);
 
             var absente = m as SuspendareAbsenteNemotivateModel;
@@ -248,6 +252,8 @@ namespace ActAditionalPlugin
                 case TipDocument.IncetareExpirare: return new IncetareExpirareForm((IncetareExpirareModel)model);
                 case TipDocument.IncetareDisciplinar: return new IncetareDisciplinarForm((IncetareDisciplinarModel)model);
                 case TipDocument.IncetarePerioadaProba: return new IncetarePerioadaProbaForm((IncetarePerioadaProbaModel)model);
+                case TipDocument.ReferatDisciplinar: return new ReferatDisciplinarForm((ReferatDisciplinarModel)model);
+                case TipDocument.AvertismentDisciplinar: return new AvertismentDisciplinarForm((AvertismentDisciplinarModel)model);
                 default: return null;
             }
         }

@@ -180,6 +180,9 @@
     <Compile Include="UI\AngajatPickerDialog.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="UI\AvertismentDisciplinarForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="UI\BulkConfirmareDialog.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -222,6 +225,9 @@
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="UI\Pvforms.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="UI\ReferatDisciplinarForm.cs">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="UI\SelectorDialog.cs">

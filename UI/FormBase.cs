@@ -401,7 +401,7 @@ namespace ActAditionalPlugin.UI
         protected Panel AddMentiuniSection(ref int y)
         {
             var pnl = AddSectiune("MENȚIUNI / OBSERVAȚII", ref y, 102);
-            _txtMentiuni = MakeMultiline(52);
+            _txtMentiuni = MakeMultiline(88);
             _txtMentiuni.Width = Math.Max(pnl.ClientSize.Width - pnl.Padding.Horizontal, 300);
             pnl.Controls.Add(_txtMentiuni);
             pnl.Resize += (s, e) => _txtMentiuni.Width = pnl.ClientSize.Width - pnl.Padding.Horizontal;
@@ -508,7 +508,7 @@ namespace ActAditionalPlugin.UI
             return tb;
         }
 
-        protected TextBox MakeMultiline(int height = 60)
+        protected TextBox MakeMultiline(int height = 78)
         {
             var tb = new TextBox { Multiline = true, Height = height, BackColor = Color.White, ForeColor = TextPrincipal, Font = FInput, BorderStyle = BorderStyle.FixedSingle, ScrollBars = ScrollBars.Vertical };
             tb.MouseWheel += (s, e) =>

@@ -68,6 +68,10 @@ namespace ActAditionalPlugin
                     fileName = "template_incetare_disciplinar.docx"; break;
                 case TipDocument.IncetarePerioadaProba:
                     fileName = "template_incetare_perioada_proba.docx"; break;
+                case TipDocument.ReferatDisciplinar:
+                    fileName = "template_referat_disciplinar.docx"; break;
+                case TipDocument.AvertismentDisciplinar:
+                    fileName = "template_avertisment.docx"; break;
                 default:
                     fileName = string.Empty; break;
             }

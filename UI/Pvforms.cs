@@ -121,7 +121,7 @@ namespace ActAditionalPlugin.UI
                 AutoSize = true,
                 Margin = new Padding(0, 4, 0, 2)
             });
-            _txtMentiuni = MakeMultiline(52);
+            _txtMentiuni = MakeMultiline(88);
             _txtMentiuni.Width = Math.Max(pnlMent.ClientSize.Width - pnlMent.Padding.Horizontal, 300);
             pnlMent.Controls.Add(_txtMentiuni);
             pnlMent.Resize += (s, e) => _txtMentiuni.Width = pnlMent.ClientSize.Width - pnlMent.Padding.Horizontal;

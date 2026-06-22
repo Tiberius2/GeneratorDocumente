@@ -68,6 +68,18 @@ namespace ActAditionalPlugin.Services
                     WordHelper.SanitizeFileName(dec.CodInregistrare),
                     dec.DataDecizie.ToString("dd.MM.yyyy"));
 
+            var ref_ = model as ReferatDisciplinarModel;
+            if (ref_ != null)
+                return string.Format("Referat_Disciplinar_{0}_{1}.pdf",
+                    WordHelper.SanitizeFileName(ref_.CodInregistrare),
+                    ref_.DataReferat.ToString("dd-MM-yyyy"));
+
+            var av = model as AvertismentDisciplinarModel;
+            if (av != null)
+                return string.Format("Avertisment_Disciplinar_{0}_{1}.pdf",
+                    WordHelper.SanitizeFileName(av.CodInregistrare),
+                    av.DataDecizie.ToString("dd-MM-yyyy"));
+
             return string.Format("{0}_{1}.pdf", model.TipDocument, DateTime.Today.ToString("dd.MM.yyyy"));
         }
 
@@ -208,6 +220,10 @@ namespace ActAditionalPlugin.Services
                     AddIncetareDisciplinar(map, (IncetareDisciplinarModel)model); break;
                 case TipDocument.IncetarePerioadaProba:
                     AddIncetarePerioadaProba(map, (IncetarePerioadaProbaModel)model); break;
+                case TipDocument.ReferatDisciplinar:
+                    AddReferatDisciplinar(map, (ReferatDisciplinarModel)model); break;
+                case TipDocument.AvertismentDisciplinar:
+                    AddAvertismentDisciplinar(map, (AvertismentDisciplinarModel)model); break;
             }
 
             return map;
@@ -220,6 +236,8 @@ namespace ActAditionalPlugin.Services
                 { "{{NumeSalariat}}",        m.NumeSalariat ?? string.Empty },
                 { "{{CNP}}",                 m.CNP ?? string.Empty },
                 { "{{Functie}}",             m.Functie ?? string.Empty },
+                { "{{NumeDepartament}}",     m.NumeDepartament ?? string.Empty },
+                { "{{CodInregistrare}}",     m.CodInregistrare ?? string.Empty },
                 { "{{NrCim}}",               m.NrCim ?? string.Empty },
                 { "{{DataCim}}",             m.DataCim != DateTime.MinValue ? m.DataCim.ToString("dd.MM.yyyy") : string.Empty },
                 { "{{NumeAngajator}}",       m.NumeAngajator ?? string.Empty },
@@ -241,7 +259,6 @@ namespace ActAditionalPlugin.Services
 
         private static void AddDecizie(Dictionary<string, string> map, DecizieModelBase m)
         {
-            map["{{CodInregistrare}}"] = m.CodInregistrare ?? string.Empty;
             map["{{DataDecizie}}"] = m.DataDecizie != DateTime.MinValue
                 ? m.DataDecizie.ToString("dd.MM.yyyy") : string.Empty;
         }
@@ -257,7 +274,6 @@ namespace ActAditionalPlugin.Services
         // ── Per tip ───────────────────────────────────────────
         private static void AddActAditional(Dictionary<string, string> map, ActAditionalModel m)
         {
-            map["{{CodInregistrare}}"] = m.CodInregistrare ?? string.Empty;
             map["{{DataEmitereAct}}"] = m.DataEmitereAct.ToString("dd.MM.yyyy");
             map["{{DataVigoare}}"] = m.DataVigoare.ToString("dd.MM.yyyy");
         }
@@ -362,6 +378,34 @@ namespace ActAditionalPlugin.Services
             map["{{ConsecinteAbateri}}"] = m.ConsecinteAbateri ?? string.Empty;
             map["{{NumeIntocmit}}"] = m.NumeIntocmit ?? string.Empty;
             map["{{FunctieIntocmit}}"] = m.FunctieIntocmit ?? string.Empty;
+        }
+
+        private static void AddReferatDisciplinar(Dictionary<string, string> map, ReferatDisciplinarModel m)
+        {
+            map["{{DataReferat}}"] = m.DataReferat != DateTime.MinValue
+                ? m.DataReferat.ToString("dd.MM.yyyy") : string.Empty;
+            map["{{NumeAutorReferat}}"] = m.NumeAutorReferat ?? string.Empty;
+            map["{{FunctieAutorReferat}}"] = m.FunctieAutorReferat ?? string.Empty;
+            map["{{LocMunca}}"] = m.LocMunca ?? string.Empty;
+            map["{{DescriereFapta}}"] = m.DescriereFapta ?? string.Empty;
+            map["{{ConsecinteAbateri}}"] = m.ConsecinteAbateri ?? string.Empty;
+            map["{{TemeiLegal}}"] = m.TemeiLegal ?? string.Empty;
+        }
+
+        private static void AddAvertismentDisciplinar(Dictionary<string, string> map, AvertismentDisciplinarModel m)
+        {
+            map["{{DataDecizie}}"] = m.DataDecizie != DateTime.MinValue
+                ? m.DataDecizie.ToString("dd.MM.yyyy") : string.Empty;
+            map["{{NrReferat}}"] = m.NrReferat ?? string.Empty;
+            map["{{DataReferat}}"] = m.DataReferat != DateTime.MinValue
+                ? m.DataReferat.ToString("dd.MM.yyyy") : string.Empty;
+            map["{{NumeAutorReferat}}"] = m.NumeAutorReferat ?? string.Empty;
+            map["{{FunctieAutorReferat}}"] = m.FunctieAutorReferat ?? string.Empty;
+            map["{{LocMunca}}"] = m.LocMunca ?? string.Empty;
+            map["{{DescriereAbateri}}"] = m.DescriereAbateri ?? string.Empty;
+            map["{{DescriereAbateriDetaliat}}"] = m.DescriereAbateriDetaliat ?? string.Empty;
+            map["{{DataComunicare}}"] = m.DataComunicare != DateTime.MinValue
+                ? m.DataComunicare.ToString("dd.MM.yyyy") : string.Empty;
         }
 
         // ── Replace in body ───────────────────────────────────

@@ -7,6 +7,7 @@ namespace ActAditionalPlugin.Services
     {
         public string NrCim { get; set; }
         public DateTime DataCim { get; set; }
+        public string NumeDepartament { get; set; }
 
         public ErpCimData()
         {
@@ -123,9 +124,11 @@ namespace ActAditionalPlugin.Services
             {
                 int companyId = xSupport.ConnectionInfo.CompanyId;
                 var ds = xSupport.GetSQLDataSet(
-                    "SELECT PEX.NUM03 AS NrCim, PEX.DATE03 AS DataCim " +
+                    "SELECT PEX.NUM03 AS NrCim, PEX.DATE03 AS DataCim, " +
+                    "ISNULL(D.NAME, '') AS NumeDepartament " +
                     "FROM PRSEXTRA PEX " +
                     "JOIN PRSN P ON PEX.PRSN = P.PRSN " +
+                    "LEFT JOIN DEPART D ON P.DEPART = D.DEPART AND D.COMPANY = " + companyId + " " +
                     "WHERE PEX.PRSN = " + prsnId + " AND PEX.COMPANY = " + companyId);
 
                 if (ds != null && ds.Count > 0)
@@ -141,6 +144,8 @@ namespace ActAditionalPlugin.Services
                     string rawDate = ds[0, "DataCim"]?.ToString() ?? string.Empty;
                     if (DateTime.TryParse(rawDate, out parsedDate))
                         result.DataCim = parsedDate;
+
+                    result.NumeDepartament = ds[0, "NumeDepartament"]?.ToString()?.Trim() ?? string.Empty;
                 }
                 else
                 {

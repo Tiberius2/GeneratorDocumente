@@ -172,10 +172,10 @@ namespace ActAditionalPlugin.UI
             pnlMotiv.Width = Math.Max(PnlBody.ClientSize.Width - PnlBody.Padding.Horizontal, 400);
             y += 380 + 10;
 
-            _txtMotiv = MakeMultiline(72);
-            _txtImprej = MakeMultiline(72);
-            _txtGrad = MakeMultiline(54);
-            _txtConsec = MakeMultiline(54);
+            _txtMotiv = MakeMultiline(92);
+            _txtImprej = MakeMultiline(92);
+            _txtGrad = MakeMultiline(69);
+            _txtConsec = MakeMultiline(69);
 
             var campuri = new[]
             {

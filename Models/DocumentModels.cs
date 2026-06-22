@@ -13,6 +13,7 @@ namespace ActAditionalPlugin.Models
         public string NumeSalariat { get; set; }
         public string CNP { get; set; }
         public string Functie { get; set; }
+        public string NumeDepartament { get; set; }
         public string NrCim { get; set; }
         public DateTime DataCim { get; set; }
 
@@ -75,7 +76,9 @@ namespace ActAditionalPlugin.Models
         IncetareDemisie = 7,
         IncetareExpirare = 8,
         IncetareDisciplinar = 9,
-        IncetarePerioadaProba = 10
+        IncetarePerioadaProba = 10,
+        ReferatDisciplinar = 11,
+        AvertismentDisciplinar = 12
     }
 
     // ══════════════════════════════════════════════════════════
@@ -314,6 +317,60 @@ namespace ActAditionalPlugin.Models
         public IncetarePerioadaProbaModel()
         {
             NrNotificare = string.Empty;
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  REFERAT DISCIPLINAR
+    // ══════════════════════════════════════════════════════════
+    public class ReferatDisciplinarModel : DocumentModelBase
+    {
+        public override TipDocument TipDocument { get { return TipDocument.ReferatDisciplinar; } }
+
+        public DateTime DataReferat { get; set; }
+        public string NumeAutorReferat { get; set; }
+        public string FunctieAutorReferat { get; set; }
+        public string LocMunca { get; set; }
+        public string DescriereFapta { get; set; }
+        public string ConsecinteAbateri { get; set; }
+        public string TemeiLegal { get; set; }
+
+        public ReferatDisciplinarModel()
+        {
+            NumeAutorReferat = string.Empty;
+            FunctieAutorReferat = string.Empty;
+            LocMunca = string.Empty;
+            DescriereFapta = string.Empty;
+            ConsecinteAbateri = string.Empty;
+            TemeiLegal = string.Empty;
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  AVERTISMENT DISCIPLINAR
+    // ══════════════════════════════════════════════════════════
+    public class AvertismentDisciplinarModel : DocumentModelBase
+    {
+        public override TipDocument TipDocument { get { return TipDocument.AvertismentDisciplinar; } }
+
+        public DateTime DataDecizie { get; set; }
+        public string NrReferat { get; set; }
+        public DateTime DataReferat { get; set; }
+        public string NumeAutorReferat { get; set; }
+        public string FunctieAutorReferat { get; set; }
+        public string LocMunca { get; set; }
+        public string DescriereAbateri { get; set; }
+        public string DescriereAbateriDetaliat { get; set; }
+        public DateTime DataComunicare { get; set; }
+
+        public AvertismentDisciplinarModel()
+        {
+            NrReferat = string.Empty;
+            NumeAutorReferat = string.Empty;
+            FunctieAutorReferat = string.Empty;
+            LocMunca = string.Empty;
+            DescriereAbateri = string.Empty;
+            DescriereAbateriDetaliat = string.Empty;
         }
     }
 }

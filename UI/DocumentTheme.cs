@@ -60,7 +60,7 @@ namespace ActAditionalPlugin.Models
                 case TipDocument.SuspendareSiIncetareSuspendare:
                     return Suspendare;
 
-                default: // toate IncetareX
+                default: // toate IncetareX + ReferatDisciplinar
                     return Incetare;
             }
         }

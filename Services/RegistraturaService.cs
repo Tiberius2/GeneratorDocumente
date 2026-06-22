@@ -117,6 +117,8 @@ namespace ActAditionalPlugin.Services
                 case Models.TipDocument.IncetareExpirare: return "Decizie Incetare prin Expirare Termen";
                 case Models.TipDocument.IncetareDisciplinar: return "Decizie Concediere Disciplinara";
                 case Models.TipDocument.IncetarePerioadaProba: return "Decizie Incetare Perioada Proba";
+                case Models.TipDocument.ReferatDisciplinar: return "Referat Disciplinar";
+                case Models.TipDocument.AvertismentDisciplinar: return "Decizie Sanctionare - Avertisment";
                 default: return tip.ToString();
             }
         }
