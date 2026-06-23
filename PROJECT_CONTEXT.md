@@ -36,11 +36,10 @@ Toate formularele folosesc layout split `SplitContainer`:
 - **Previzualizează** (dreapta-2, galben `RGB(255,243,176)`, icon `refreshPreview`) → generează PDF temp, îl afișează în viewer. Text se schimbă în "Actualizează" după prima previzualizare
 - **Generează PDF** (dreapta-1, `Theme.Accent`, icon `documentOK`) → validare completă + generare finală + registratură
 
-**Iconițe:** `Properties.Resources.refreshPreview`, `Properties.Resources.documentOK`, `Properties.Resources.back_arrow` (toate adăugate ca Image în Resources)
+**Iconițe:** `Properties.Resources.refreshPreview`, `Properties.Resources.documentOK`, `Properties.Resources.back_arrow`
 
 **`IsSplitterFixed = true`** — splitter-ul nu poate fi mutat  
-**`ValidateFormForPreview()`** — virtual, validare minimă (doar cod înregistrare), override în forme cu câmpuri blocante
-
+**`ValidateFormForPreview()`** — virtual, validare minimă (doar cod înregistrare)  
 **`MakeMultiline(height=88)`** — TextBox multiline; mouse wheel redirecționat către PnlBody  
 `FlatAppearance.BorderSize = 3` pe toate butoanele
 
@@ -48,9 +47,9 @@ Toate formularele folosesc layout split `SplitContainer`:
 
 ## SelectorDialog
 
-- Categorii: ACTE ADIȚIONALE, DECIZII — SUSPENDARE, DECIZII — ÎNCETARE, REFERATE, PROCESE VERBALE
-- **Constructor:** `SelectorDialog(List<AngajatItem> angajati, int currentPrsnId)`
-- **Proprietăți output:** `SelectedPrsnId`, `SelectedName`, `SelectedCNP`, `SelectedFunctie`, `Selection`
+- Categorii: **ACTE ADIȚIONALE, DECIZII — SUSPENDARE, DECIZII — ÎNCETARE, CERCETARE DISCIPLINARĂ, PROCESE VERBALE**
+- Constructor: `SelectorDialog(List<AngajatItem> angajati, int currentPrsnId)`
+- Proprietăți output: `SelectedPrsnId`, `SelectedName`, `SelectedCNP`, `SelectedFunctie`, `Selection`
 
 ---
 
@@ -76,14 +75,17 @@ Toate formularele folosesc layout split `SplitContainer`:
 | Încetare suspendare | `IncetareSuspendareForm` | `IncetareSuspendare = 6` |
 | Demisie | `IncetareDemisieForm` | `IncetareDemisie = 7` |
 | Expirare termen | `IncetareExpirareForm` | `IncetareExpirare = 8` |
-| Disciplinar | `IncetareDisciplinarForm` | `IncetareDisciplinar = 9` |
 | Perioadă de probă | `IncetarePerioadaProbaForm` | `IncetarePerioadaProba = 10` |
 
-### REFERATE
-| Tip | Form | TipDocument enum |
-|---|---|---|
-| Referat disciplinar | `ReferatDisciplinarForm` | `ReferatDisciplinar = 11` |
-| Avertisment disciplinar | `AvertismentDisciplinarForm` | `AvertismentDisciplinar = 12` |
+### CERCETARE DISCIPLINARĂ (fostă "REFERATE" — redenumită și extinsă)
+| Tip | Form | TipDocument enum | Template |
+|---|---|---|---|
+| Referat disciplinar | `ReferatDisciplinarForm` | `ReferatDisciplinar = 11` | `template_referat_disciplinar.docx` |
+| Avertisment disciplinar | `AvertismentDisciplinarForm` | `AvertismentDisciplinar = 12` | `template_avertisment.docx` |
+| Constituire comisie | `DecizieConstituireComisieForm` | `DecizieConstituireComisie = 13` | `template_decizie_constituire_comisie.docx` |
+| Convocare cercetare | `ConvocareCercetareForm` | `ConvocareCercetare = 14` | `template_convocare_cercetare.docx` |
+| Proces verbal cercetare | `ProcesVerbalCercetareForm` | `ProcesVerbalCercetare = 15` | `template_pv_cercetare_disciplinara.docx` |
+| Decizie disciplinară | `IncetareDisciplinarForm` | `IncetareDisciplinar = 9` | (existent) |
 
 ### PROCESE VERBALE
 | Tip | Form |
@@ -99,9 +101,9 @@ Toate formularele folosesc layout split `SplitContainer`:
 ```
 DocumentModelBase (abstract)
 ├── PrsnId, NumeSalariat, CNP, Functie
-├── NumeDepartament  ← NOU (din ErpCimData via JOIN DEPART)
+├── NumeDepartament
 ├── NrCim, DataCim
-├── CodInregistrare  ← în BuildCommonPlaceholders (disponibil pentru TOATE tipurile)
+├── CodInregistrare
 ├── NumeAngajator, CIFAngajator, ReprezentantLegal, FunctieReprezentant
 ├── AdresaCompanie, ZipCompanie, NrRegComertului, IbanCompanie
 ├── NrTelefonCompanie, EmailCompanie, WebsiteCompanie
@@ -116,6 +118,34 @@ AvertismentDisciplinarModel : DocumentModelBase
 └── DataDecizie, NrReferat, DataReferat
     NumeAutorReferat, FunctieAutorReferat, LocMunca
     DescriereAbateri, DescriereAbateriDetaliat, DataComunicare
+
+// DTO-uri liste dinamice (folosite de formele de cercetare disciplinara)
+ReferatSursaItem { CodSiData, Intocmitor }
+MembruComisieItem { Nume, Functie }
+
+DecizieConstituireComisieModel : DocumentModelBase
+└── DataDecizie, NumeIntocmitorHr (default "Marin Iulia Alina")
+    DataNotaExplicativa, DescriereAbatere
+    IntervalAniCCM (default "2024-2026")
+    CodInregistrareITM (default "6123/CCMMRM/19.07.2024")
+    List<ReferatSursaItem> Referate
+    NumePresedinte, FunctiePresedinte
+    List<MembruComisieItem> Membri
+    NumeObservator, FunctieObservator
+    DataInceputCercetare, DataSfarsitCercetare
+
+ConvocareCercetareModel : DocumentModelBase
+└── DataConvocare, NumeIntocmitorHr (default "Marin Iulia Alina")
+    CodCor (din ERP: PRSJOBPOS→JOBPOSITION→SPECIALTY.CODE)
+    List<ReferatSursaItem> Referate, DataNotaExplicativa, DescriereAbatere
+    IntervalAniCCM (default "2024-2026")
+    CodInregistrareITM (default "6123/CCMMRM/19.07.2024")
+    LocCercetare (default "Localitatea Cătămărăști Deal..."), DataCercetare, OraConvocare
+    NrDecizieComisie, DataDecizieComisie
+    List<MembruComisieItem> Membri
+
+ProcesVerbalCercetareModel : DocumentModelBase
+└── DataCercetare, LocCercetare, ConcluziiComisie, SanctiuneaPropusa
 ```
 
 ---
@@ -129,9 +159,22 @@ Disponibile pentru TOATE documentele:
 `{{IbanCompanie}}`, `{{NrTelefonCompanie}}`, `{{EmailCompanie}}`, `{{WebsiteCompanie}}`,
 `{{ArticolCompartiment}}`, `{{ArticolContestatie}}`, `{{MentiuniDocument}}`
 
-Placeholder-e specifice Referat: `{{DataReferat}}`, `{{NumeAutorReferat}}`, `{{FunctieAutorReferat}}`, `{{LocMunca}}`, `{{DescriereFapta}}`, `{{ConsecinteAbateri}}`, `{{TemeiLegal}}`
+**Cercetare disciplinară — comune:**
+`{{DataDecizie}}`, `{{NumeIntocmitorHr}}`, `{{IntervalAniCCM}}`, `{{CodInregistrareITM}}`,
+`{{DataNotaExplicativa}}`, `{{DescriereAbatere}}`,
+`{{ReferateSursa}}` (concatenat ", "), `{{NumeSiFunctieIntocmitorReferat}}` (distinct, concatenat ", ")
 
-Placeholder-e specifice Avertisment: `{{DataDecizie}}`, `{{NrReferat}}`, `{{DataReferat}}`, `{{NumeAutorReferat}}`, `{{FunctieAutorReferat}}`, `{{LocMunca}}`, `{{DescriereAbateri}}`, `{{DescriereAbateriDetaliat}}`, `{{DataComunicare}}`
+**Decizie constituire comisie — specifice:**
+`{{NumePresedinte}}`, `{{FunctiePresedinte}}`,
+`{{NumeMembru}}` + `{{FunctieMembru}}` (linie expandabilă per membru — `ExpandParagraphList`),
+`{{NumeMembruSemnatura}}` (expandabil la semnături),
+`{{NumeObservator}}`, `{{FunctieObservator}}`,
+`{{DataInceputCercetare}}`, `{{DataSfarsitCercetare}}`
+
+**Convocare — specifice:**
+`{{DataConvocare}}`, `{{CodCor}}`, `{{LocCercetare}}`, `{{DataCercetare}}`, `{{OraConvocare}}`,
+`{{NrDecizieComisie}}`, `{{DataDecizieComisie}}`,
+`{{NumeMembruComisie}}` + `{{FunctieMembruComisie}}` (expandabil per membru)
 
 ---
 
@@ -148,30 +191,29 @@ RegistraturaService.Instance.GetLoginDate()
 ### ErpDataProvider
 ```csharp
 ErpDataProvider.GetCimData(prsnId, XSupport)
-// SQL extins: JOIN DEPART → aduce și NumeDepartament în ErpCimData
+// ErpCimData: NrCim, DataCim, NumeDepartament, CodCor
+// CodCor: SELECT TOP 1 S.CODE FROM PRSJOBPOS PJ
+//   JOIN JOBPOSITION J ON PJ.JOBPOSITION = J.JOBPOSITION
+//   JOIN SPECIALTY S ON J.SPECIALTY = S.SPECIALTY
+//   WHERE PJ.PRSN = {id} AND PJ.COMPANY = {companyId}
 ErpDataProvider.GetCompanyData(XSupport)
 ```
 
 ### BulkContext (static bridge TXCode↔STA)
 ```csharp
-BulkContext.Angajati          // List<AngajatItem>
-BulkContext.CompanyData       // ErpCompanyData
-BulkContext.GetCimData        // Func<int, ErpCimData>
-BulkContext.GetAdresaPrimitor // Func<int, string>
-BulkContext.XSupport          // XSupport — NOU, pentru SQL din forme (WORKAREA etc.)
-BulkContext.IsAvailable       // → true dacă toate setate
-BulkContext.Reset()
+BulkContext.Angajati, BulkContext.CompanyData, BulkContext.GetCimData
+BulkContext.GetAdresaPrimitor, BulkContext.XSupport, BulkContext.IsAvailable, BulkContext.Reset()
 ```
 
 ### TemplateEngine
 ```csharp
 TemplateEngine.GeneratePdf(model, templatePath)
-// CodInregistrare acum în BuildCommonPlaceholders (nu mai e doar în AddDecizie/AddActAditional)
-// Filename: tip_CodInreg_DataDoc.pdf (ex: Referat_Disciplinar_26171-56_22-06-2026.pdf)
+// ExpandParagraphList<T>(body, markerText, items, mapBuilder)
+//   — găsește paragraful cu marker, îl clonează per item, șterge originalul
+//   — folosit pentru: {{NumeMembru}}/{{FunctieMembru}}, {{NumeMembruSemnatura}},
+//                     {{NumeMembruComisie}}/{{FunctieMembruComisie}}
+// ReferateSursa și NumeSiFunctieIntocmitorReferat: concatenate cu ", " (Distinct pentru intocmitori)
 ```
-
-### ClauzeService / CnpHelper
-Neschimbate față de versiunea anterioară.
 
 ---
 
@@ -180,69 +222,84 @@ Neschimbate față de versiunea anterioară.
 ```
 FormBase (abstract)
 ├── Theme: DocumentTheme
-├── PnlBody: Panel (scrollabil, în split Panel1)
+├── PnlBody: Panel (AutoScroll, în split Panel1)
 ├── SplitContainer: 40% sidebar / 60% PdfViewer
 │
-├── Footer sidebar (static):
-│   ├── btnInapoi (stânga, roșu deschis, icon back_arrow)
-│   ├── btnActualizeaza (dreapta-2, galben, icon refreshPreview)
-│   └── btnGenereaza (dreapta-1, Theme.Accent, icon documentOK)
-│
-├── AddSectiune(titlu, ref y, height) → FlowLayoutPanel în PnlBody
-├── AddMentiuniSection(ref y) → _txtMentiuni (Width explicit, fără Dock.Top!)
+├── AddSectiune(titlu, ref y, height) → FlowLayoutPanel în PnlBody (AutoSize, MinimumSize)
+├── AddDynamicListSection(titlu, btnText, onAdd, ref y) → Panel cu AutoScroll=true, height=200
+│     — header cu buton "+ Adaugă..." (Theme.Accent, alb), panel items scrollabil
+│     — folosit pentru liste de RefератSursa și MembruComisie
+├── AddMentiuniSection(ref y) → _txtMentiuni
 ├── AddRow(panel, int[] percents) → TableLayoutPanel
 ├── AddLabeledInput(tbl, col, label, control, required=false)
 │
-├── MakeInput(placeholder) → TextBox cu placeholder gri
+├── MakeInput(placeholder) → TextBox cu placeholder gri (SetPlaceholder)
 ├── MakeDtp() → DateTimePicker
 ├── MakeReadonly() → TextBox readonly
 ├── MakeMultiline(height=88) → TextBox multiline, MouseWheel → PnlBody scroll
+├── MakeCombo() → ComboBox, MouseWheel blocat (redirect PnlBody)
 │
-├── ValidateFormForPreview() virtual → validare minimă (cod înregistrare)
-├── GetRegistraturaDate() virtual → override în subclase
+├── ReflowPnlBody() — restivuiește controalele din PnlBody în ordinea adăugării (nu după Top)
+├── RecalcFlowHeight(flow) — recalculează height FlowLayoutPanel după conținut
+├── RedirectWheelToPnlBody — handler shared pentru ComboBox MouseWheel
+│
+├── ValidateFormForPreview() virtual
+├── GetRegistraturaDate() virtual
 ├── PopulateMentiuni() virtual
-│
-└── ResizeImage(Image, w, h) → scalează icoane la 20×20
+└── ResizeImage(Image, w, h)
 
 DocumentFormBase : FormBase
 ├── CodInregistrareField → TextBox readonly cu cod live
-└── FillAngajator(model) → populează câmpurile companiei
+└── FillAngajator(model)
 
 DecizieFormBase : DocumentFormBase
-├── ValidateFormForPreview() override → ValidateDecizie() (doar cod)
+├── ValidateFormForPreview() override
 └── GetRegistraturaDate() override → DtpDataDecizie.Value.Date
+```
+
+### Controale dinamice (CercetareDisciplinaraForms.cs)
+```
+PhHelper (static)
+├── SetPh(tb, ph) — placeholder gri + GotFocus/LostFocus
+└── RelayoutPanel(pnl, items) — stivuiește items în panel cu AutoScroll
+
+ReferatSursaControl : Panel
+├── Numar (label), OnDelete (Action)
+├── _txtCodSiData (placeholder "ex. 168/14.04.2025")
+├── _txtIntocmitor (placeholder "Nume, Prenume — Funcție")
+├── IsValid() — verifică ForeColor != Gray
+└── GetItem() → ReferatSursaItem
+
+MembruComisieControl : Panel
+├── Numar, OnDelete
+├── _txtNume, _txtFunctie
+├── IsValid(), GetItem() → MembruComisieItem
 ```
 
 ---
 
-## ReferatDisciplinarForm
+## DocumentTheme
 
-**Template:** `template_referat_disciplinar.docx`  
-**Secțiuni:** Date document | Autor referat | Locul de muncă (ComboBox) | Descriere abatere (2 textarea) | Temei legal | Mențiuni  
-**LocMunca:** ComboBox populat din `SELECT DISTINCT NAME, ADDRESS FROM WORKAREA WHERE COMPANY={id} AND ISACTIVE=1`  
-Format item: `"NAME - ADDRESS"`  
-**Filename PDF:** `Referat_Disciplinar_{CodInreg}_{DataReferat}.pdf`  
-**DB:** fără scriere în DB după generare (nu e Decizie)
+| Temă | Culoare | Folosită pentru |
+|---|---|---|
+| `Acte` | Albastru RGB(63,129,198) | Act Adițional |
+| `Suspendare` | Verde teal | Decizii Suspendare |
+| `Incetare` | Roșu | Decizii Încetare |
+| `CercetareDisciplinara` | Violet RGB(120,60,170) | Toate tipurile 9,11-15 |
+| `Pv` | Amber | Procese Verbale |
 
-## AvertismentDisciplinarForm
-
-**Template:** `template_avertisment.docx`  
-**Secțiuni:** Date decizie | Referat sursă | Autor referat | Locul de muncă (ComboBox) | Descrierea abaterii (2 textarea: detaliat + scurt) | Data comunicării | Mențiuni  
-**LocMunca:** același ComboBox WORKAREA ca la Referat  
-**Filename PDF:** `Avertisment_Disciplinar_{CodInreg}_{DataDecizie}.pdf`  
-**Câmpuri template:** `{{DescriereAbateriDetaliat}}` (intro) + `{{DescriereAbateri}}` (Art. 2)
+`DocumentTheme.For(TipDocument)` → returnează tema corectă.
 
 ---
 
 ## PluginEntry — Structuri Cheie
 
 ```csharp
-// După generare (OK sau Cancel) → SelectorDialog se redeschide mereu
-// BulkContext.XSupport = XSupport setat la inițializare
+// CreateDocModel populează CodCor doar pentru ConvocareCercetareModel:
+var convocare = m as ConvocareCercetareModel;
+if (convocare != null) convocare.CodCor = cimData.CodCor;
 
-// CreateForm switch include:
-case TipDocument.ReferatDisciplinar: return new ReferatDisciplinarForm(...)
-case TipDocument.AvertismentDisciplinar: return new AvertismentDisciplinarForm(...)
+// CreateForm switch include toate cele 6 tipuri din Cercetare Disciplinară
 ```
 
 ---
@@ -251,30 +308,46 @@ case TipDocument.AvertismentDisciplinar: return new AvertismentDisciplinarForm(.
 
 | Regulă | Detaliu |
 |---|---|
-| Stringuri UI | Română cu diacritice în labels vizibile, fără diacritice în cod/placeholder |
+| Stringuri UI | Română cu diacritice în labels, fără diacritice în cod/placeholder |
 | Placeholdere template | `{{NumePlaceholder}}` fără spații |
-| `CodInregistrare` | În `BuildCommonPlaceholders` — disponibil pentru toate tipurile |
-| `MentiuniDocument` | NU în PDF, DA în DB (Acte/Decizii); PV: nici în PDF nici în DB |
+| `CodInregistrare` | În `BuildCommonPlaceholders` — disponibil pentru toate |
+| `MentiuniDocument` | NU în PDF, DA în DB (Acte/Decizii); PV: nici PDF nici DB |
 | `ErpCimData`/`ErpCompanyData` | Namespace `ActAditionalPlugin.Services` |
-| Dataset Softone | `ds[i, "COLOANA"]` — nu `ds[i]["COLOANA"]` sau `ds.Current` |
-| `GetRegistraturaDate()` | Virtual în FormBase, override obligatoriu în forme cu date proprii |
-| `AddMentiuniSection` | FĂRĂ `Dock = DockStyle.Top` (width explicit pe resize) |
-| `BulkContext.XSupport` | Disponibil pentru SQL din forme (WORKAREA, etc.) |
-| `ValidateFormForPreview()` | Override când ValidateForm() blochează preview (câmpuri non-obligatorii pentru preview) |
-| `MakeMultiline` | Nu folosi `Dock.Top` în FlowLayoutPanel; setează Width explicit + Resize handler |
+| Dataset Softone | `ds[i, "COLOANA"]` — nu `ds[i]["COLOANA"]` |
+| `GetRegistraturaDate()` | Virtual în FormBase, override obligatoriu |
+| `AddMentiuniSection` | FĂRĂ `Dock = DockStyle.Top` |
+| `BulkContext.XSupport` | Disponibil pentru SQL din forme |
+| `MakeCombo()` | Metodă de instanță (nu static) — include MouseWheel blocat |
+| `AddDynamicListSection` | Protected în FormBase — folosit pt liste Referate/Membri |
+| `ReflowPnlBody` | Sortare după ordinea din Controls, NU după Top |
+| `ExpandParagraphList` | Fiecare placeholder pe paragraf separat în template! |
+| `ReferateSursa` concatenat | `string.Join(", ", ...)` — nu expand paragraf |
+| `NumeSiFunctieIntocmitorReferat` | `.Distinct()` înainte de Join |
+| MouseWheel | Blocat pe ComboBox (MakeCombo) și NumericUpDown (EchipamentItemControl) |
+| CCM/ITM precompletate | IntervalAniCCM="2024-2026", CodInregistrareITM="6123/CCMMRM/19.07.2024" |
+| NumeIntocmitorHr default | "Marin Iulia Alina" — editabil manual |
 
 ---
 
 ## Probleme Cunoscute Rezolvate
 
-1. `GetRegistraturaDate` lipsea din FormBase ca virtual → adăugat
-2. `ErpCimData`/`ErpCompanyData` referite ca `Models.*` → corectate la `Services.*`
+1. `GetRegistraturaDate` lipsea din FormBase → adăugat virtual
+2. `ErpCimData`/`ErpCompanyData` referite ca `Models.*` → `Services.*`
 3. `ClauzeConfig.Clauze` (API veche) → `GetTipSelectat().Clauze`
-4. `_txtMentiuni.Dock = DockStyle.Top` în FlowLayoutPanel → width explicit
-5. `pnlIncetareWrapper` suprapunea mențiunile → `y += pnlIncInner.Height + 8`
+4. `_txtMentiuni.Dock = DockStyle.Top` → width explicit
+5. `pnlIncetareWrapper` suprapunea mențiunile → `y += height + 8`
 6. Label "DATA ÎNCETARE SUSPENDARE" invizibil → `Theme.Accent`
-7. App se închidea după generare → loop redeschide SelectorDialog pentru OK și Cancel
-8. `{{CodInregistrare}}` nu se înlocuia în Referat/Avertisment → mutat în `BuildCommonPlaceholders`
-9. PdfViewer ascuns de placeholder label (Z-order) → `BringToFront()` + `lblPlaceholder.Visible=false`
-10. MouseWheel pe multiline TextBox nu scrola formularul → redirecționat în `MakeMultiline`
-11. Dataset Softone iterat greșit cu `ds[i]["COL"]` → corectat la `ds[i, "COL"]`
+7. App se închidea după generare → loop redeschide SelectorDialog
+8. `{{CodInregistrare}}` nu se înlocuia în Referat/Avertisment → `BuildCommonPlaceholders`
+9. PdfViewer ascuns de placeholder label → `BringToFront()` + `lblPlaceholder.Visible=false`
+10. MouseWheel pe multiline TextBox → redirecționat în `MakeMultiline`
+11. Dataset Softone `ds[i]["COL"]` → `ds[i, "COL"]`
+12. FlowLayoutPanel AutoSize=true → expansiune infinită pe orizontală → AutoSize=false + RecalcFlowHeight
+13. BeginInvoke înainte de handle creat → eliminat ControlAdded+BeginInvoke
+14. ReflowPnlBody sort după Top → amestecare la resize → sort după ordinea din Controls
+15. HandleCreated apelat cu PnlBody fără dimensiuni → eliminat, mutat în Shown+ResizeEnd
+16. `{{NumeMembruSemnatura}}` + `{{NumeObservator}}` în același paragraf → split în paragrafe separate
+17. PlaceholderText (C# 11) → SetPh() + GotFocus/LostFocus pattern
+18. RelayoutPanel private în DecizieConstituireComisieForm → mutat în PhHelper static
+19. AddDynamicListSection private → mutat în FormBase protected
+20. ComboBox/NumericUpDown consumau scroll wheel → MouseWheel blocat și redirecționat

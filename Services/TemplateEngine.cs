@@ -163,6 +163,22 @@ namespace ActAditionalPlugin.Services
                         });
                 }
 
+                var pvcFill = model as ProcesVerbalCercetareModel;
+                if (pvcFill != null)
+                {
+                    ExpandParagraphList(body, "{{NumeMembruComisie}}", pvcFill.Membri,
+                        (m, i) => new Dictionary<string, string>
+                        {
+                            { "{{NumeMembruComisie}}", m.Nume },
+                            { "{{FunctieMembruComisie}}", m.Functie }
+                        });
+                    ExpandParagraphList(body, "{{NumeMembruSemnatura}}", pvcFill.Membri,
+                        (m, i) => new Dictionary<string, string>
+                        {
+                            { "{{NumeMembruSemnatura}}", m.Nume }
+                        });
+                }
+
                 var placeholders = BuildPlaceholders(model);
                 ReplaceInBody(body, placeholders);
 
@@ -568,6 +584,10 @@ namespace ActAditionalPlugin.Services
             map["{{DataCercetare}}"] = m.DataCercetare != DateTime.MinValue
                 ? m.DataCercetare.ToString("dd.MM.yyyy") : string.Empty;
             map["{{LocCercetare}}"] = m.LocCercetare ?? string.Empty;
+            map["{{NrDecizieComisie}}"] = m.NrDecizieComisie ?? string.Empty;
+            map["{{DataDecizieComisie}}"] = m.DataDecizieComisie ?? string.Empty;
+            map["{{DataNotaExplicativa}}"] = m.DataNotaExplicativa ?? string.Empty;
+            map["{{DescriereAbatere}}"] = m.DescriereAbatere ?? string.Empty;
             map["{{ConcluziiComisie}}"] = m.ConcluziiComisie ?? string.Empty;
             map["{{SanctiuneaPropusa}}"] = m.SanctiuneaPropusa ?? string.Empty;
         }

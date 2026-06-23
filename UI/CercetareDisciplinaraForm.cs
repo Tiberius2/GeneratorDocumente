@@ -751,9 +751,16 @@ namespace ActAditionalPlugin.UI
     public class ProcesVerbalCercetareForm : DocumentFormBase
     {
         private readonly ProcesVerbalCercetareModel _m;
+
         private TextBox _txtCodInregistrare;
         private DateTimePicker _dtpDataCercetare;
+        private TextBox _txtNrDecizieComisie;
+        private DateTimePicker _dtpDataDecizieComisie;
         private TextBox _txtLocCercetare;
+        private DateTimePicker _dtpDataNotaExplicativa;
+        private TextBox _txtDescriereAbatere;
+        private Panel _pnlMembri;
+        private readonly List<MembruComisieControl> _membri = new List<MembruComisieControl>();
         private TextBox _txtConcluziiComisie;
         private TextBox _txtSanctiuneaPropusa;
 
@@ -762,42 +769,107 @@ namespace ActAditionalPlugin.UI
         {
             _m = model;
             BuildBody();
+            Shown += (s, e) =>
+            {
+                if (_pnlMembri != null)
+                {
+                    _pnlMembri.Width = PnlBody.ClientSize.Width - PnlBody.Padding.Horizontal;
+                    PhHelper.RelayoutPanel(_pnlMembri, _membri.Cast<Control>().ToList());
+                }
+            };
         }
 
         private void BuildBody()
         {
             int y = 0;
 
+            // ── 1. DATE PROCES VERBAL ──────────────────────────
             var pnlDoc = AddSectiune("DATE PROCES VERBAL", ref y, 78);
             _txtCodInregistrare = MakeReadonly();
             CodInregistrareField = _txtCodInregistrare;
             if (!string.IsNullOrEmpty(_model.CodInregistrare))
                 _txtCodInregistrare.Text = _model.CodInregistrare;
             _dtpDataCercetare = MakeDtp();
-            var tbl = AddRow(pnlDoc, new[] { 40, 60 });
-            AddLabeledInput(tbl, 0, "Cod înregistrare", _txtCodInregistrare, required: true);
-            AddLabeledInput(tbl, 1, "Data cercetării", _dtpDataCercetare);
+            var tbl1 = AddRow(pnlDoc, new[] { 40, 60 });
+            AddLabeledInput(tbl1, 0, "Cod înregistrare", _txtCodInregistrare, required: true);
+            AddLabeledInput(tbl1, 1, "Data cercetării", _dtpDataCercetare);
 
-            var pnlLoc = AddSectiune("LOC DESFĂȘURARE", ref y, 62);
-            _txtLocCercetare = MakeInput("ex. Sediul societății, Sala de ședințe");
-            var tbl2 = AddRow(pnlLoc, new[] { 100 });
-            AddLabeledInput(tbl2, 0, "Locul cercetării", _txtLocCercetare, required: true);
+            // ── 2. DECIZIA DE CONSTITUIRE A COMISIEI ──────────
+            var pnlDec = AddSectiune("DECIZIA DE CONSTITUIRE A COMISIEI", ref y, 78);
+            _txtNrDecizieComisie = MakeInput("ex. 135");
+            _dtpDataDecizieComisie = MakeDtp();
+            var tbl2 = AddRow(pnlDec, new[] { 40, 60 });
+            AddLabeledInput(tbl2, 0, "Nr. decizie comisie", _txtNrDecizieComisie, required: true);
+            AddLabeledInput(tbl2, 1, "Data deciziei comisie", _dtpDataDecizieComisie);
 
-            var pnlConcluzii = AddSectiune("CONCLUZII COMISIE", ref y, 112);
-            _txtConcluziiComisie = MakeMultiline(88);
+            // ── 3. LOCUL DESFĂȘURĂRII ──────────────────────────
+            var pnlLoc = AddSectiune("LOCUL DESFĂȘURĂRII", ref y, 62);
+            _txtLocCercetare = MakeInput();
+            _txtLocCercetare.Text = _m.LocCercetare;
+            var tbl3 = AddRow(pnlLoc, new[] { 100 });
+            AddLabeledInput(tbl3, 0, "Locul cercetării", _txtLocCercetare);
+
+            // ── 4. COMPONENȚA COMISIEI DE DISCIPLINĂ ──────────
+            _pnlMembri = AddDynamicListSection("COMPONENȚA COMISIEI DE DISCIPLINĂ", "Adaugă membru",
+                () => AddMembru(), ref y);
+
+            // ── 5. NOTA EXPLICATIVĂ ȘI DESCRIEREA ABATERII ────
+            var pnlNota = AddSectiune("NOTA EXPLICATIVĂ ȘI DESCRIEREA ABATERII", ref y, 182);
+            _dtpDataNotaExplicativa = MakeDtp();
+            var tblNota = AddRow(pnlNota, new[] { 50, 50 });
+            AddLabeledInput(tblNota, 0, "Data notei explicative", _dtpDataNotaExplicativa);
+            var lblDescriereAbatere = new Label
+            {
+                Text = "Descriere abatere",
+                Font = new Font("Segoe UI", 9f),
+                ForeColor = Color.FromArgb(55, 75, 105),
+                AutoSize = true
+            };
+            pnlNota.Controls.Add(lblDescriereAbatere);
+            _txtDescriereAbatere = MakeMultiline(110);
+            _txtDescriereAbatere.Width = pnlNota.ClientSize.Width - pnlNota.Padding.Horizontal;
+            pnlNota.Controls.Add(_txtDescriereAbatere);
+            pnlNota.Resize += (s, e) =>
+                _txtDescriereAbatere.Width = pnlNota.ClientSize.Width - pnlNota.Padding.Horizontal;
+
+            // ── 6. CONCLUZIILE COMISIEI ────────────────────────
+            var pnlConcluzii = AddSectiune("CONCLUZIILE COMISIEI", ref y, 134);
+            _txtConcluziiComisie = MakeMultiline(110);
             _txtConcluziiComisie.Width = pnlConcluzii.ClientSize.Width - pnlConcluzii.Padding.Horizontal;
             pnlConcluzii.Controls.Add(_txtConcluziiComisie);
             pnlConcluzii.Resize += (s, e) =>
                 _txtConcluziiComisie.Width = pnlConcluzii.ClientSize.Width - pnlConcluzii.Padding.Horizontal;
 
-            var pnlSanct = AddSectiune("SANCȚIUNEA PROPUSĂ", ref y, 112);
-            _txtSanctiuneaPropusa = MakeMultiline(88);
+            // ── 7. SANCȚIUNEA PROPUSĂ ──────────────────────────
+            var pnlSanct = AddSectiune("SANCȚIUNEA PROPUSĂ", ref y, 134);
+            _txtSanctiuneaPropusa = MakeMultiline(110);
             _txtSanctiuneaPropusa.Width = pnlSanct.ClientSize.Width - pnlSanct.Padding.Horizontal;
             pnlSanct.Controls.Add(_txtSanctiuneaPropusa);
             pnlSanct.Resize += (s, e) =>
                 _txtSanctiuneaPropusa.Width = pnlSanct.ClientSize.Width - pnlSanct.Padding.Horizontal;
 
+            // ── 8. MENȚIUNI ────────────────────────────────────
             AddMentiuniSection(ref y);
+
+            AddMembru();
+            AddMembru();
+            AddMembru();
+        }
+
+        private void AddMembru()
+        {
+            var ctrl = new MembruComisieControl(_membri.Count + 1);
+            ctrl.Width = Math.Max(_pnlMembri.Width - 2, 400);
+            ctrl.OnDelete = () =>
+            {
+                _membri.Remove(ctrl);
+                _pnlMembri.Controls.Remove(ctrl);
+                for (int i = 0; i < _membri.Count; i++) _membri[i].Numar = i + 1;
+                PhHelper.RelayoutPanel(_pnlMembri, _membri.Cast<Control>().ToList());
+            };
+            _membri.Add(ctrl);
+            _pnlMembri.Controls.Add(ctrl);
+            PhHelper.RelayoutPanel(_pnlMembri, _membri.Cast<Control>().ToList());
         }
 
         protected override bool ValidateFormForPreview()
@@ -811,7 +883,13 @@ namespace ActAditionalPlugin.UI
         {
             if (!RequireText(_txtCodInregistrare, "Cod înregistrare")) return false;
             if (!ValidateCodInregistrare(_txtCodInregistrare)) return false;
-            if (!RequireText(_txtLocCercetare, "Locul cercetării")) return false;
+            if (!RequireText(_txtNrDecizieComisie, "Nr. decizie comisie")) return false;
+            if (_membri.Count == 0 || !_membri[0].IsValid())
+            {
+                MessageBox.Show("Adaugă cel puțin un membru al comisiei.", "Validare",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return false;
+            }
             return true;
         }
 
@@ -820,9 +898,20 @@ namespace ActAditionalPlugin.UI
             FillAngajator(_m);
             _m.CodInregistrare = GetText(_txtCodInregistrare);
             _m.DataCercetare = GetDate(_dtpDataCercetare);
+            _m.NrDecizieComisie = GetText(_txtNrDecizieComisie);
+            _m.DataDecizieComisie = GetDate(_dtpDataDecizieComisie).ToString("dd.MM.yyyy");
             _m.LocCercetare = GetText(_txtLocCercetare);
+            _m.DataNotaExplicativa = GetDate(_dtpDataNotaExplicativa).ToString("dd.MM.yyyy");
+            _m.DescriereAbatere = GetText(_txtDescriereAbatere);
             _m.ConcluziiComisie = GetText(_txtConcluziiComisie);
             _m.SanctiuneaPropusa = GetText(_txtSanctiuneaPropusa);
+
+            _m.Membri.Clear();
+            foreach (var mb in _membri)
+            {
+                var item = mb.GetItem();
+                if (item != null) _m.Membri.Add(item);
+            }
         }
 
         protected override string GetTemplatePath()

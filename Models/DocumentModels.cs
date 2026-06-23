@@ -494,14 +494,24 @@ namespace ActAditionalPlugin.Models
 
         public DateTime DataCercetare { get; set; }
         public string LocCercetare { get; set; }
+        public string NrDecizieComisie { get; set; }
+        public string DataDecizieComisie { get; set; }
+        public string DataNotaExplicativa { get; set; }
+        public string DescriereAbatere { get; set; }
         public string ConcluziiComisie { get; set; }
         public string SanctiuneaPropusa { get; set; }
+        public List<MembruComisieItem> Membri { get; set; }
 
         public ProcesVerbalCercetareModel()
         {
-            LocCercetare = string.Empty;
+            LocCercetare = "Biroul Administrativ al Societatii din Sat Catamarasti-Deal, Com. Mihai Eminescu, Jud. Botosani";
+            NrDecizieComisie = string.Empty;
+            DataDecizieComisie = string.Empty;
+            DataNotaExplicativa = string.Empty;
+            DescriereAbatere = string.Empty;
             ConcluziiComisie = string.Empty;
             SanctiuneaPropusa = string.Empty;
+            Membri = new List<MembruComisieItem>();
         }
     }
 }
