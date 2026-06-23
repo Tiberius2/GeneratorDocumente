@@ -122,17 +122,17 @@ namespace ActAditionalPlugin.UI
 
             var btnActualizeaza = new Button
             {
-                Text = "  Previzualizează",
+                Text = " Previzualizează Documentul",
                 Height = 36,
                 Width = 220,
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Color.FromArgb(255, 243, 176),
                 ForeColor = Color.FromArgb(120, 90, 10),
-                Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+                Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
                 Cursor = Cursors.Hand,
                 Top = 10,
                 Anchor = AnchorStyles.Right | AnchorStyles.Top,
-                Image = ResizeImage(ActAditionalPlugin.Properties.Resources.refreshPreview, 20, 20),
+                Image = ResizeImage(ActAditionalPlugin.Properties.Resources.refreshPreview, 12, 12),
                 ImageAlign = System.Drawing.ContentAlignment.MiddleCenter,
                 TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
                 TextImageRelation = TextImageRelation.ImageBeforeText,
@@ -260,12 +260,17 @@ namespace ActAditionalPlugin.UI
             {
                 split.SplitterDistance = (int)(split.Width * 0.40);
                 ActiveControl = null;
+                foreach (Control c in PnlBody.Controls)
+                    if (c is FlowLayoutPanel fl) RecalcFlowHeight(fl);
+                ReflowPnlBody();
             };
             ResizeEnd += (s, e) =>
             {
-                // Mentin proportia 40% la resize manual
                 if (split.Width > 0)
                     split.SplitterDistance = (int)(split.Width * 0.40);
+                foreach (Control c in PnlBody.Controls)
+                    if (c is FlowLayoutPanel fl) RecalcFlowHeight(fl);
+                ReflowPnlBody();
             };
             FormClosed += (s, e) =>
             {
@@ -318,7 +323,7 @@ namespace ActAditionalPlugin.UI
                     {
                         _splitPreviewDone = true;
                         if (_btnActualizeaza != null)
-                            _btnActualizeaza.Text = "  Actualizează";
+                            _btnActualizeaza.Text = " Actualizează Previzualizarea";
                     }
                 }
             }
@@ -408,7 +413,125 @@ namespace ActAditionalPlugin.UI
             return pnl;
         }
 
+        // ── Dynamic list section (PV-style: header+buton+AutoScroll panel in PnlBody) ──
+        protected Panel AddDynamicListSection(string titlu, string btnText, Action onAdd, ref int yOffset)
+        {
+            var pnlHdr = new Panel
+            {
+                Left = 0,
+                Top = yOffset,
+                Height = 34,
+                BackColor = Color.Transparent,
+                Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top
+            };
+            int initW = Math.Max(PnlBody.ClientSize.Width - PnlBody.Padding.Horizontal, 400);
+            pnlHdr.Width = initW;
+            PnlBody.Controls.Add(pnlHdr);
+            PnlBody.Resize += (s, e) => pnlHdr.Width = PnlBody.ClientSize.Width - PnlBody.Padding.Horizontal;
+
+            pnlHdr.Paint += (s, e) =>
+                e.Graphics.FillRectangle(new SolidBrush(Theme.Accent), 0, 0, 4, pnlHdr.Height);
+
+            pnlHdr.Controls.Add(new Label
+            {
+                Text = titlu,
+                Font = FSectiune,
+                ForeColor = Theme.Accent,
+                AutoSize = true,
+                Location = new Point(8, 8)
+            });
+
+            var btnAdd = new Button
+            {
+                Text = "+ " + btnText,
+                Height = 26,
+                Width = 160,
+                Font = new Font("Segoe UI", 9f, FontStyle.Bold),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Theme.Accent,
+                ForeColor = Color.White,
+                Cursor = Cursors.Hand,
+                Top = 4,
+                Anchor = AnchorStyles.Right | AnchorStyles.Top
+            };
+            btnAdd.FlatAppearance.BorderColor = Theme.AccentDark;
+            btnAdd.FlatAppearance.BorderSize = 1;
+            btnAdd.MouseEnter += (s, e) => btnAdd.BackColor = Theme.AccentDark;
+            btnAdd.MouseLeave += (s, e) => btnAdd.BackColor = Theme.Accent;
+            btnAdd.Click += (s, e) => onAdd();
+            pnlHdr.Controls.Add(btnAdd);
+            pnlHdr.Resize += (s, e) => btnAdd.Left = pnlHdr.Width - btnAdd.Width;
+            btnAdd.Left = initW - btnAdd.Width;
+            yOffset += 38;
+
+            var pnlItems = new Panel
+            {
+                Left = 0,
+                Top = yOffset,
+                Height = 200,
+                Width = initW,
+                BackColor = Color.FromArgb(248, 244, 254),
+                AutoScroll = true,
+                Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top
+            };
+            PnlBody.Controls.Add(pnlItems);
+            PnlBody.Resize += (s, e) =>
+            {
+                pnlItems.Width = PnlBody.ClientSize.Width - PnlBody.Padding.Horizontal;
+                foreach (Control c in pnlItems.Controls)
+                    c.Width = Math.Max(pnlItems.ClientSize.Width - 4, 380);
+            };
+            yOffset += 208;
+
+            return pnlItems;
+        }
+
         // ── Layout helpers ─────────────────────────────────────
+
+        // Recalculeaza height-ul unui FlowLayoutPanel dupa continut real
+        private void RecalcFlowHeight(FlowLayoutPanel flow)
+        {
+            if (!IsHandleCreated) return;
+            int h = flow.Padding.Top + flow.Padding.Bottom;
+            foreach (Control c in flow.Controls)
+                h += c.Height + c.Margin.Vertical;
+            if (h < 20) h = 20;
+            if (flow.Height != h)
+            {
+                flow.Height = h;
+                ReflowPnlBody();
+            }
+        }
+
+        // Restivuieste toate controalele din PnlBody in ordine verticala
+        private bool _reflowing = false;
+        protected void ReflowPnlBody()
+        {
+            if (_reflowing) return;
+            _reflowing = true;
+            try
+            {
+                var controls = new System.Collections.Generic.List<Control>();
+                foreach (Control c in PnlBody.Controls)
+                    controls.Add(c);
+                // Nu sortam dupa Top — folosim ordinea adaugarii din Controls
+
+                int y = PnlBody.Padding.Top;
+                for (int i = 0; i < controls.Count; i++)
+                {
+                    var c = controls[i];
+                    c.Top = y;
+                    if (IsFlowPanel(c))
+                        y += c.Height + 14;
+                    else
+                        y += c.Height;
+                }
+            }
+            finally { _reflowing = false; }
+        }
+
+        private static bool IsFlowPanel(Control c) => c is FlowLayoutPanel;
+
         protected Panel AddSectiune(string titlu, ref int yOffset, int height)
         {
             // Header-band sectiune
@@ -453,7 +576,8 @@ namespace ActAditionalPlugin.UI
             PnlBody.Controls.Add(flow);
             PnlBody.Resize += (s, e) =>
             {
-                flow.Width = PnlBody.ClientSize.Width - PnlBody.Padding.Horizontal;
+                int w = PnlBody.ClientSize.Width - PnlBody.Padding.Horizontal;
+                flow.Width = w;
                 foreach (Control c in flow.Controls)
                     c.Width = flow.ClientSize.Width - flow.Padding.Horizontal;
             };
@@ -523,11 +647,25 @@ namespace ActAditionalPlugin.UI
             return tb;
         }
 
+        private void RedirectWheelToPnlBody(object sender, MouseEventArgs e)
+        {
+            if (PnlBody != null)
+            {
+                var delta = -(e.Delta / 120) * SystemInformation.MouseWheelScrollLines * 16;
+                PnlBody.AutoScrollPosition = new System.Drawing.Point(0, Math.Max(0, -PnlBody.AutoScrollPosition.Y + delta));
+            }
+            ((HandledMouseEventArgs)e).Handled = true;
+        }
+
         protected static DateTimePicker MakeDtp()
             => new DateTimePicker { Format = DateTimePickerFormat.Short, Value = DateTime.Today, Font = FInput, Height = 26 };
 
-        protected static ComboBox MakeCombo()
-            => new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Font = FInput, BackColor = Color.White, ForeColor = TextPrincipal };
+        protected ComboBox MakeCombo()
+        {
+            var cmb = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Font = FInput, BackColor = Color.White, ForeColor = TextPrincipal };
+            cmb.MouseWheel += RedirectWheelToPnlBody;
+            return cmb;
+        }
 
         protected Label MakeSectionHeader(string text, int top)
             => new Label { Text = text, Font = FSectiune, ForeColor = Theme.Accent, AutoSize = true, Location = new Point(0, top) };

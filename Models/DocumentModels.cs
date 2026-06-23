@@ -78,7 +78,10 @@ namespace ActAditionalPlugin.Models
         IncetareDisciplinar = 9,
         IncetarePerioadaProba = 10,
         ReferatDisciplinar = 11,
-        AvertismentDisciplinar = 12
+        AvertismentDisciplinar = 12,
+        DecizieConstituireComisie = 13,
+        ConvocareCercetare = 14,
+        ProcesVerbalCercetare = 15
     }
 
     // ══════════════════════════════════════════════════════════
@@ -371,6 +374,134 @@ namespace ActAditionalPlugin.Models
             LocMunca = string.Empty;
             DescriereAbateri = string.Empty;
             DescriereAbateriDetaliat = string.Empty;
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  DECIZIE CONSTITUIRE COMISIE CERCETARE DISCIPLINARA
+    // ══════════════════════════════════════════════════════════
+    // ── DTO-uri pentru liste dinamice ─────────────────────────
+    public class ReferatSursaItem
+    {
+        public string CodSiData { get; set; }   // ex. "168/14.04.2025"
+        public string Intocmitor { get; set; }  // ex. "Aniculaesei Anisoara — Contabil"
+    }
+
+    public class MembruComisieItem
+    {
+        public string Nume { get; set; }
+        public string Functie { get; set; }
+    }
+
+    public class DecizieConstituireComisieModel : DocumentModelBase
+    {
+        public override TipDocument TipDocument { get { return TipDocument.DecizieConstituireComisie; } }
+
+        public DateTime DataDecizie { get; set; }
+        public string NumeIntocmitorHr { get; set; }
+        public DateTime DataNotaExplicativa { get; set; }
+        public string DescriereAbatere { get; set; }
+        public string IntervalAniCCM { get; set; }
+        public string CodInregistrareITM { get; set; }
+
+        // Lista dinamica referate
+        public List<ReferatSursaItem> Referate { get; set; }
+
+        // Comisia
+        public string NumePresedinte { get; set; }
+        public string FunctiePresedinte { get; set; }
+        public List<MembruComisieItem> Membri { get; set; }
+        public string NumeObservator { get; set; }
+        public string FunctieObservator { get; set; }
+
+        // Perioada cercetare
+        public DateTime DataInceputCercetare { get; set; }
+        public DateTime DataSfarsitCercetare { get; set; }
+
+        public DecizieConstituireComisieModel()
+        {
+            DescriereAbatere = string.Empty;
+            NumeIntocmitorHr = "Marin Iulia Alina";
+            IntervalAniCCM = "2024-2026";
+            CodInregistrareITM = "6123/CCMMRM/19.07.2024";
+            Referate = new List<ReferatSursaItem>();
+            NumePresedinte = string.Empty;
+            FunctiePresedinte = string.Empty;
+            Membri = new List<MembruComisieItem>();
+            NumeObservator = string.Empty;
+            FunctieObservator = string.Empty;
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  CONVOCARE CERCETARE DISCIPLINARA
+    // ══════════════════════════════════════════════════════════
+    public class ConvocareCercetareModel : DocumentModelBase
+    {
+        public override TipDocument TipDocument { get { return TipDocument.ConvocareCercetare; } }
+
+        // Date convocare
+        public DateTime DataConvocare { get; set; }
+        public string CodCor { get; set; }
+
+        // Referatele sursa (refolosim acelasi DTO)
+        public List<ReferatSursaItem> Referate { get; set; }
+        public DateTime DataNotaExplicativa { get; set; }
+
+        // Descriere abatere
+        public string DescriereAbatere { get; set; }
+
+        // Precompletate, editabile
+        public string IntervalAniCCM { get; set; }
+        public string CodInregistrareITM { get; set; }
+
+        // Detalii cercetare
+        public string LocCercetare { get; set; }
+        public DateTime DataCercetare { get; set; }
+        public string OraConvocare { get; set; }
+
+        // Decizia comisiei
+        public string NrDecizieComisie { get; set; }
+        public DateTime DataDecizieComisie { get; set; }
+
+        // Membri comisie (lista dinamica)
+        public List<MembruComisieItem> Membri { get; set; }
+
+        // Intocmitor HR
+        public string NumeIntocmitorHr { get; set; }
+
+        public ConvocareCercetareModel()
+        {
+            CodCor = string.Empty;
+            Referate = new List<ReferatSursaItem>();
+            DescriereAbatere = string.Empty;
+            IntervalAniCCM = "2024-2026";
+            CodInregistrareITM = "6123/CCMMRM/19.07.2024";
+            LocCercetare = "Localitatea Cătămărăști Deal, Județul Botoșani, la Biroul Administrativ";
+            OraConvocare = string.Empty;
+            NrDecizieComisie = string.Empty;
+            Membri = new List<MembruComisieItem>();
+            NumeIntocmitorHr = "Marin Iulia Alina";
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  PROCES VERBAL CERCETARE DISCIPLINARA
+    // ══════════════════════════════════════════════════════════
+    public class ProcesVerbalCercetareModel : DocumentModelBase
+    {
+        public override TipDocument TipDocument { get { return TipDocument.ProcesVerbalCercetare; } }
+
+        public DateTime DataCercetare { get; set; }
+        public string LocCercetare { get; set; }
+        public string ConcluziiComisie { get; set; }
+        public string SanctiuneaPropusa { get; set; }
+
+        public ProcesVerbalCercetareModel()
+        {
+            LocCercetare = string.Empty;
+            ConcluziiComisie = string.Empty;
+            SanctiuneaPropusa = string.Empty;
         }
     }
 }

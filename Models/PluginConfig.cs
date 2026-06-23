@@ -72,6 +72,12 @@ namespace ActAditionalPlugin
                     fileName = "template_referat_disciplinar.docx"; break;
                 case TipDocument.AvertismentDisciplinar:
                     fileName = "template_avertisment.docx"; break;
+                case TipDocument.DecizieConstituireComisie:
+                    fileName = "template_decizie_constituire_comisie.docx"; break;
+                case TipDocument.ConvocareCercetare:
+                    fileName = "template_convocare_cercetare.docx"; break;
+                case TipDocument.ProcesVerbalCercetare:
+                    fileName = "template_pv_cercetare_disciplinara.docx"; break;
                 default:
                     fileName = string.Empty; break;
             }

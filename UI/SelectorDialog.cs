@@ -49,7 +49,7 @@ namespace ActAditionalPlugin.UI
              "Suspendare + Încetare", "Suspendare cu clauză de încetare",
              new DocSelection(TipDocument.SuspendareSiIncetareSuspendare), DocumentTheme.Suspendare),
 
-            // Decizii — Încetare
+            // Decizii — Încetare (fara Disciplinar — mutat in Cercetare Disciplinara)
             ("DECIZII — ÎNCETARE",
              "Încetare suspendare", "Reluare activitate",
              new DocSelection(TipDocument.IncetareSuspendare), DocumentTheme.Incetare),
@@ -60,19 +60,28 @@ namespace ActAditionalPlugin.UI
              "Expirare termen", "CIM pe durată determinată",
              new DocSelection(TipDocument.IncetareExpirare), DocumentTheme.Incetare),
             ("DECIZII — ÎNCETARE",
-             "Disciplinar", "Art. 61 lit. a Codul Muncii",
-             new DocSelection(TipDocument.IncetareDisciplinar), DocumentTheme.Incetare),
-            ("DECIZII — ÎNCETARE",
              "Perioadă de probă", "Art. 31 alin. 3-4 Codul Muncii",
              new DocSelection(TipDocument.IncetarePerioadaProba), DocumentTheme.Incetare),
 
-            // Referate
-            ("REFERATE",
+            // Cercetare Disciplinară
+            ("CERCETARE DISCIPLINARĂ",
              "Referat disciplinar", "Sesizare abatere disciplinară",
-             new DocSelection(TipDocument.ReferatDisciplinar), DocumentTheme.Incetare),
-            ("REFERATE",
+             new DocSelection(TipDocument.ReferatDisciplinar), DocumentTheme.CercetareDisciplinara),
+            ("CERCETARE DISCIPLINARĂ",
              "Avertisment disciplinar", "Decizie sancţionare disciplinară",
-             new DocSelection(TipDocument.AvertismentDisciplinar), DocumentTheme.Incetare),
+             new DocSelection(TipDocument.AvertismentDisciplinar), DocumentTheme.CercetareDisciplinara),
+            ("CERCETARE DISCIPLINARĂ",
+             "Constituire comisie", "Decizie constituire comisie cercetare disciplinară",
+             new DocSelection(TipDocument.DecizieConstituireComisie), DocumentTheme.CercetareDisciplinara),
+            ("CERCETARE DISCIPLINARĂ",
+             "Convocare cercetare", "Convocare la cercetarea disciplinară prealabilă",
+             new DocSelection(TipDocument.ConvocareCercetare), DocumentTheme.CercetareDisciplinara),
+            ("CERCETARE DISCIPLINARĂ",
+             "Proces verbal cercetare", "Proces verbal cercetare disciplinară prealabilă",
+             new DocSelection(TipDocument.ProcesVerbalCercetare), DocumentTheme.CercetareDisciplinara),
+            ("CERCETARE DISCIPLINARĂ",
+             "Decizie disciplinară", "Art. 61 lit. a Codul Muncii",
+             new DocSelection(TipDocument.IncetareDisciplinar), DocumentTheme.CercetareDisciplinara),
 
             // Procese Verbale
             ("PROCESE VERBALE",

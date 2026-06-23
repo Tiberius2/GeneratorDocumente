@@ -71,6 +71,7 @@ namespace ActAditionalPlugin.UI
                 Font = new Font("Segoe UI", 10f),
                 Width = pnlLoc.ClientSize.Width - pnlLoc.Padding.Horizontal
             };
+            _cmbLocMunca.MouseWheel += (s, e) => { ((System.Windows.Forms.HandledMouseEventArgs)e).Handled = true; };
             pnlLoc.Controls.Add(lblLoc);
             pnlLoc.Controls.Add(_cmbLocMunca);
             pnlLoc.Resize += (s, e) =>

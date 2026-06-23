@@ -80,6 +80,24 @@ namespace ActAditionalPlugin.Services
                     WordHelper.SanitizeFileName(av.CodInregistrare),
                     av.DataDecizie.ToString("dd-MM-yyyy"));
 
+            var cc = model as DecizieConstituireComisieModel;
+            if (cc != null)
+                return string.Format("Decizie_Constituire_Comisie_{0}_{1}.pdf",
+                    WordHelper.SanitizeFileName(cc.CodInregistrare),
+                    cc.DataDecizie.ToString("dd-MM-yyyy"));
+
+            var conv = model as ConvocareCercetareModel;
+            if (conv != null)
+                return string.Format("Convocare_Cercetare_{0}_{1}.pdf",
+                    WordHelper.SanitizeFileName(conv.CodInregistrare),
+                    conv.DataConvocare.ToString("dd-MM-yyyy"));
+
+            var pvc = model as ProcesVerbalCercetareModel;
+            if (pvc != null)
+                return string.Format("PV_Cercetare_Disciplinara_{0}_{1}.pdf",
+                    WordHelper.SanitizeFileName(pvc.CodInregistrare),
+                    pvc.DataCercetare.ToString("dd-MM-yyyy"));
+
             return string.Format("{0}_{1}.pdf", model.TipDocument, DateTime.Today.ToString("dd.MM.yyyy"));
         }
 
@@ -116,6 +134,34 @@ namespace ActAditionalPlugin.Services
                 var decBase = model as DecizieModelBase;
                 if (decBase != null)
                     InjectArticoleFinal(body, decBase);
+
+                var convocare = model as ConvocareCercetareModel;
+                if (convocare != null)
+                {
+                    ExpandParagraphList(body, "{{NumeMembruComisie}}", convocare.Membri,
+                        (m, i) => new Dictionary<string, string>
+                        {
+                            { "{{NumeMembruComisie}}", m.Nume },
+                            { "{{FunctieMembruComisie}}", m.Functie }
+                        });
+                    // Referate concatenate intr-un singur placeholder
+                }
+
+                var comisie = model as DecizieConstituireComisieModel;
+                if (comisie != null)
+                {
+                    ExpandParagraphList(body, "{{NumeMembru}}", comisie.Membri,
+                        (m, i) => new Dictionary<string, string>
+                        {
+                            { "{{NumeMembru}}", m.Nume },
+                            { "{{FunctieMembru}}", m.Functie }
+                        });
+                    ExpandParagraphList(body, "{{NumeMembruSemnatura}}", comisie.Membri,
+                        (m, i) => new Dictionary<string, string>
+                        {
+                            { "{{NumeMembruSemnatura}}", m.Nume }
+                        });
+                }
 
                 var placeholders = BuildPlaceholders(model);
                 ReplaceInBody(body, placeholders);
@@ -224,6 +270,12 @@ namespace ActAditionalPlugin.Services
                     AddReferatDisciplinar(map, (ReferatDisciplinarModel)model); break;
                 case TipDocument.AvertismentDisciplinar:
                     AddAvertismentDisciplinar(map, (AvertismentDisciplinarModel)model); break;
+                case TipDocument.DecizieConstituireComisie:
+                    AddDecizieConstituireComisie(map, (DecizieConstituireComisieModel)model); break;
+                case TipDocument.ConvocareCercetare:
+                    AddConvocareCercetare(map, (ConvocareCercetareModel)model); break;
+                case TipDocument.ProcesVerbalCercetare:
+                    AddProcesVerbalCercetare(map, (ProcesVerbalCercetareModel)model); break;
             }
 
             return map;
@@ -406,6 +458,118 @@ namespace ActAditionalPlugin.Services
             map["{{DescriereAbateriDetaliat}}"] = m.DescriereAbateriDetaliat ?? string.Empty;
             map["{{DataComunicare}}"] = m.DataComunicare != DateTime.MinValue
                 ? m.DataComunicare.ToString("dd.MM.yyyy") : string.Empty;
+        }
+
+        // Gaseste primul paragraf care contine markerText, il duplica pentru fiecare item
+        // si aplica substitutia individuala din mapBuilder pe fiecare copie.
+        private static void ExpandParagraphList<T>(Body body, string markerText,
+            List<T> items, Func<T, int, Dictionary<string, string>> mapBuilder)
+        {
+            if (items == null || items.Count == 0) return;
+
+            var allParas = body.Descendants<Paragraph>().ToList();
+            Paragraph templatePara = null;
+            foreach (var para in allParas)
+            {
+                string text = string.Concat(para.Descendants<DocumentFormat.OpenXml.Wordprocessing.Text>()
+                    .Select(t => t.Text));
+                if (text.Contains(markerText)) { templatePara = para; break; }
+            }
+            if (templatePara == null) return;
+
+            // Inseram copii inainte de templatePara, apoi stergem templatePara
+            var parent = templatePara.Parent;
+            for (int i = 0; i < items.Count; i++)
+            {
+                var clone = (Paragraph)templatePara.CloneNode(true);
+                var map = mapBuilder(items[i], i);
+                foreach (var txtNode in clone.Descendants<DocumentFormat.OpenXml.Wordprocessing.Text>().ToList())
+                {
+                    foreach (var kv in map)
+                        txtNode.Text = txtNode.Text.Replace(kv.Key, kv.Value);
+                }
+                parent.InsertBefore(clone, templatePara);
+            }
+            parent.RemoveChild(templatePara);
+        }
+
+        private static void AddDecizieConstituireComisie(Dictionary<string, string> map, DecizieConstituireComisieModel m)
+        {
+            map["{{DataDecizie}}"] = m.DataDecizie != DateTime.MinValue
+                ? m.DataDecizie.ToString("dd.MM.yyyy") : string.Empty;
+            map["{{DataNotaExplicativa}}"] = m.DataNotaExplicativa != DateTime.MinValue
+                ? m.DataNotaExplicativa.ToString("dd.MM.yyyy") : string.Empty;
+            map["{{DescriereAbatere}}"] = m.DescriereAbatere ?? string.Empty;
+            map["{{NumeIntocmitorHr}}"] = m.NumeIntocmitorHr ?? string.Empty;
+            map["{{IntervalAniCCM}}"] = m.IntervalAniCCM ?? string.Empty;
+            map["{{CodInregistrareITM}}"] = m.CodInregistrareITM ?? string.Empty;
+            map["{{NumePresedinte}}"] = m.NumePresedinte ?? string.Empty;
+            map["{{FunctiePresedinte}}"] = m.FunctiePresedinte ?? string.Empty;
+            map["{{NumeObservator}}"] = m.NumeObservator ?? string.Empty;
+            map["{{FunctieObservator}}"] = m.FunctieObservator ?? string.Empty;
+            map["{{DataInceputCercetare}}"] = m.DataInceputCercetare != DateTime.MinValue
+                ? m.DataInceputCercetare.ToString("dd.MM.yyyy") : string.Empty;
+            map["{{DataSfarsitCercetare}}"] = m.DataSfarsitCercetare != DateTime.MinValue
+                ? m.DataSfarsitCercetare.ToString("dd.MM.yyyy") : string.Empty;
+
+            // Referate concatenate (nu expandare paragrafe)
+            if (m.Referate != null && m.Referate.Count > 0)
+            {
+                map["{{ReferateSursa}}"] = string.Join(", ",
+                    m.Referate.Select(r => r.CodSiData ?? string.Empty));
+                map["{{NumeSiFunctieIntocmitorReferat}}"] = string.Join(", ",
+                    m.Referate.Select(r => r.Intocmitor ?? string.Empty).Distinct());
+            }
+            else
+            {
+                map["{{ReferateSursa}}"] = string.Empty;
+                map["{{NumeSiFunctieIntocmitorReferat}}"] = string.Empty;
+            }
+            // {{NumeMembru}}/{{FunctieMembru}} si {{NumeMembruSemnatura}} expandate prin ExpandParagraphList
+        }
+
+        private static void AddConvocareCercetare(Dictionary<string, string> map, ConvocareCercetareModel m)
+        {
+            map["{{DataConvocare}}"] = m.DataConvocare != DateTime.MinValue
+                ? m.DataConvocare.ToString("dd.MM.yyyy") : string.Empty;
+            map["{{CodCor}}"] = m.CodCor ?? string.Empty;
+            map["{{DataNotaExplicativa}}"] = m.DataNotaExplicativa != DateTime.MinValue
+                ? m.DataNotaExplicativa.ToString("dd.MM.yyyy") : string.Empty;
+            map["{{DescriereAbatere}}"] = m.DescriereAbatere ?? string.Empty;
+            map["{{IntervalAniCCM}}"] = m.IntervalAniCCM ?? string.Empty;
+            map["{{CodInregistrareITM}}"] = m.CodInregistrareITM ?? string.Empty;
+            map["{{LocCercetare}}"] = m.LocCercetare ?? string.Empty;
+            map["{{DataCercetare}}"] = m.DataCercetare != DateTime.MinValue
+                ? m.DataCercetare.ToString("dd.MM.yyyy") : string.Empty;
+            map["{{OraConvocare}}"] = m.OraConvocare ?? string.Empty;
+            map["{{NrDecizieComisie}}"] = m.NrDecizieComisie ?? string.Empty;
+            map["{{DataDecizieComisie}}"] = m.DataDecizieComisie != DateTime.MinValue
+                ? m.DataDecizieComisie.ToString("dd.MM.yyyy") : string.Empty;
+            map["{{NumeIntocmitorHr}}"] = m.NumeIntocmitorHr ?? string.Empty;
+
+            // Referate concatenate
+            if (m.Referate != null && m.Referate.Count > 0)
+            {
+                map["{{ReferateSursa}}"] = string.Join(", ",
+                    m.Referate.Select(r => r.CodSiData ?? string.Empty));
+                map["{{NumeSiFunctieIntocmitorReferat}}"] = string.Join(", ",
+                    m.Referate.Select(r => r.Intocmitor ?? string.Empty).Distinct());
+            }
+            else
+            {
+                map["{{ReferateSursa}}"] = string.Empty;
+                map["{{NumeSiFunctieIntocmitorReferat}}"] = string.Empty;
+            }
+            // {{NumeMembruComisie}}/{{FunctieMembruComisie}} expandate prin ExpandParagraphList
+        }
+
+        private static void AddProcesVerbalCercetare(Dictionary<string, string> map, ProcesVerbalCercetareModel m)
+        {
+            map["{{DataCercetare}}"] = m.DataCercetare != DateTime.MinValue
+                ? m.DataCercetare.ToString("dd.MM.yyyy") : string.Empty;
+            map["{{LocCercetare}}"] = m.LocCercetare ?? string.Empty;
+            map["{{ConcluziiComisie}}"] = m.ConcluziiComisie ?? string.Empty;
+            map["{{SanctiuneaPropusa}}"] = m.SanctiuneaPropusa ?? string.Empty;
         }
 
         // ── Replace in body ───────────────────────────────────

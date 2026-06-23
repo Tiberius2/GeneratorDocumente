@@ -45,6 +45,13 @@ namespace ActAditionalPlugin.Models
             Color.FromArgb(225, 190, 140),
             Color.FromArgb(158, 94, 18));
 
+        /// <summary>Violet — Cercetare Disciplinară</summary>
+        public static readonly DocumentTheme CercetareDisciplinara = new DocumentTheme(
+            Color.FromArgb(120, 60, 170),
+            Color.FromArgb(243, 235, 252),
+            Color.FromArgb(195, 165, 225),
+            Color.FromArgb(92, 40, 140));
+
         // ── Factory ───────────────────────────────────────────
         public static DocumentTheme For(TipDocument tip)
         {
@@ -60,7 +67,15 @@ namespace ActAditionalPlugin.Models
                 case TipDocument.SuspendareSiIncetareSuspendare:
                     return Suspendare;
 
-                default: // toate IncetareX + ReferatDisciplinar
+                case TipDocument.ReferatDisciplinar:
+                case TipDocument.AvertismentDisciplinar:
+                case TipDocument.DecizieConstituireComisie:
+                case TipDocument.ConvocareCercetare:
+                case TipDocument.ProcesVerbalCercetare:
+                case TipDocument.IncetareDisciplinar:
+                    return CercetareDisciplinara;
+
+                default:
                     return Incetare;
             }
         }

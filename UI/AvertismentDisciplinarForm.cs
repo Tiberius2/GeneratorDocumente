@@ -75,6 +75,7 @@ namespace ActAditionalPlugin.UI
                 Font = new Font("Segoe UI", 10f),
                 Width = pnlLoc.ClientSize.Width - pnlLoc.Padding.Horizontal
             };
+            _cmbLocMunca.MouseWheel += (s, e) => { ((System.Windows.Forms.HandledMouseEventArgs)e).Handled = true; };
             pnlLoc.Controls.Add(new Label { Text = "Punct de lucru / magazin", Font = new Font("Segoe UI", 9f), ForeColor = Color.FromArgb(55, 75, 105), AutoSize = true });
             pnlLoc.Controls.Add(_cmbLocMunca);
             pnlLoc.Resize += (s, e) => _cmbLocMunca.Width = pnlLoc.ClientSize.Width - pnlLoc.Padding.Horizontal;

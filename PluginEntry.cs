@@ -212,6 +212,9 @@ namespace ActAditionalPlugin
                 case TipDocument.IncetarePerioadaProba: m = new IncetarePerioadaProbaModel(); break;
                 case TipDocument.ReferatDisciplinar: m = new ReferatDisciplinarModel(); break;
                 case TipDocument.AvertismentDisciplinar: m = new AvertismentDisciplinarModel(); break;
+                case TipDocument.DecizieConstituireComisie: m = new DecizieConstituireComisieModel(); break;
+                case TipDocument.ConvocareCercetare: m = new ConvocareCercetareModel(); break;
+                case TipDocument.ProcesVerbalCercetare: m = new ProcesVerbalCercetareModel(); break;
                 default: m = new ActAditionalModel(); break;
             }
 
@@ -223,6 +226,10 @@ namespace ActAditionalPlugin
             m.DataCim = cimData.DataCim;
             m.NumeDepartament = cimData.NumeDepartament;
             ApplyCompanyData(m, companyData);
+
+            var convocare = m as ConvocareCercetareModel;
+            if (convocare != null)
+                convocare.CodCor = cimData.CodCor;
 
             var absente = m as SuspendareAbsenteNemotivateModel;
             if (absente != null && string.IsNullOrWhiteSpace(absente.IntocmitDe))
@@ -254,6 +261,9 @@ namespace ActAditionalPlugin
                 case TipDocument.IncetarePerioadaProba: return new IncetarePerioadaProbaForm((IncetarePerioadaProbaModel)model);
                 case TipDocument.ReferatDisciplinar: return new ReferatDisciplinarForm((ReferatDisciplinarModel)model);
                 case TipDocument.AvertismentDisciplinar: return new AvertismentDisciplinarForm((AvertismentDisciplinarModel)model);
+                case TipDocument.DecizieConstituireComisie: return new DecizieConstituireComisieForm((DecizieConstituireComisieModel)model);
+                case TipDocument.ConvocareCercetare: return new ConvocareCercetareForm((ConvocareCercetareModel)model);
+                case TipDocument.ProcesVerbalCercetare: return new ProcesVerbalCercetareForm((ProcesVerbalCercetareModel)model);
                 default: return null;
             }
         }

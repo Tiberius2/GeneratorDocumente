@@ -111,6 +111,20 @@ namespace ActAditionalPlugin.UI
                 TextAlign = HorizontalAlignment.Center,
                 BorderStyle = BorderStyle.FixedSingle
             };
+            _nudCantitate.MouseWheel += (s, e) =>
+            {
+                ((HandledMouseEventArgs)e).Handled = true;
+                // Propagam catre parent scrollabil
+                var p = Parent;
+                while (p != null && !(p is Panel pp && ((Panel)p).AutoScroll)) p = p.Parent;
+                if (p != null)
+                {
+                    var scrollPanel = (Panel)p;
+                    int delta = -(e.Delta / 120) * SystemInformation.MouseWheelScrollLines * 16;
+                    scrollPanel.AutoScrollPosition = new System.Drawing.Point(0,
+                        Math.Max(0, -scrollPanel.AutoScrollPosition.Y + delta));
+                }
+            };
 
             _txtPret = new TextBox
             {

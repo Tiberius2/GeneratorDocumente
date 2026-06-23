@@ -8,11 +8,14 @@ namespace ActAditionalPlugin.Services
         public string NrCim { get; set; }
         public DateTime DataCim { get; set; }
         public string NumeDepartament { get; set; }
+        public string CodCor { get; set; }
 
         public ErpCimData()
         {
             NrCim = string.Empty;
             DataCim = DateTime.MinValue;
+            NumeDepartament = string.Empty;
+            CodCor = string.Empty;
         }
     }
 
@@ -151,6 +154,17 @@ namespace ActAditionalPlugin.Services
                 {
                     xSupport.Warning("ActAditional: nu s-a gasit contract pentru PRSN " + prsnId);
                 }
+
+                // CodCor — din PRSJOBPOS -> JOBPOSITION -> SPECIALTY
+                var dsCor = xSupport.GetSQLDataSet(
+                    "SELECT TOP 1 S.CODE AS CodCor " +
+                    "FROM PRSJOBPOS PJ " +
+                    "JOIN JOBPOSITION J ON PJ.JOBPOSITION = J.JOBPOSITION " +
+                    "JOIN SPECIALTY S ON J.SPECIALTY = S.SPECIALTY " +
+                    "WHERE PJ.PRSN = " + prsnId + " AND PJ.COMPANY = " + companyId);
+
+                if (dsCor != null && dsCor.Count > 0)
+                    result.CodCor = dsCor[0, "CodCor"]?.ToString()?.Trim() ?? string.Empty;
             }
             catch (Exception ex)
             {
