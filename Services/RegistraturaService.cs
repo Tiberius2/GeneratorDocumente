@@ -90,48 +90,5 @@ namespace ActAditionalPlugin.Services
             _xs.ExecuteSQL(sqlAudit);
         }
 
-        // ── Mapari statice ─────────────────────────────────────
-        public static int GetTipDocPK(Models.TipDocument tip)
-        {
-            switch (tip)
-            {
-                case Models.TipDocument.ActAditional: return 2;
-                default: return 11;
-            }
-        }
-
-        public static int GetTipDocPK(Models.TipPV tip) => 22;
-
-        public static string GetTitluDoc(Models.TipDocument tip)
-        {
-            switch (tip)
-            {
-                case Models.TipDocument.ActAditional: return "Act Aditional";
-                case Models.TipDocument.SuspendareCresterecopil: return "Decizie Suspendare Crestere Copil";
-                case Models.TipDocument.SuspendareCresterecopilHandicap: return "Decizie Suspendare Crestere Copil Handicap";
-                case Models.TipDocument.SuspendareAbsenteNemotivate: return "Decizie Suspendare Absente Nemotivate";
-                case Models.TipDocument.SuspendareAcordParti: return "Decizie Suspendare Acordul Partilor";
-                case Models.TipDocument.SuspendareSiIncetareSuspendare: return "Decizie Suspendare si Incetare";
-                case Models.TipDocument.IncetareSuspendare: return "Decizie Incetare Suspendare";
-                case Models.TipDocument.IncetareDemisie: return "Decizie Incetare prin Demisie";
-                case Models.TipDocument.IncetareExpirare: return "Decizie Incetare prin Expirare Termen";
-                case Models.TipDocument.IncetareDisciplinar: return "Decizie Concediere Disciplinara";
-                case Models.TipDocument.IncetarePerioadaProba: return "Decizie Incetare Perioada Proba";
-                case Models.TipDocument.ReferatDisciplinar: return "Referat Disciplinar";
-                case Models.TipDocument.AvertismentDisciplinar: return "Decizie Sanctionare - Avertisment";
-                default: return tip.ToString();
-            }
-        }
-
-        public static string GetTitluDoc(Models.TipPV tip)
-        {
-            switch (tip)
-            {
-                case Models.TipPV.Echipamente: return "Proces Verbal Echipamente de Lucru";
-                case Models.TipPV.Electronice: return "Proces Verbal Echipamente Electronice";
-                case Models.TipPV.Autovehicul: return "Proces Verbal Autovehicul";
-                default: return "Proces Verbal";
-            }
-        }
     }
 }

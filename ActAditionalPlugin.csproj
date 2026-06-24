@@ -158,78 +158,34 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Models\ClauzeConfig.cs" />
-    <Compile Include="Models\DocumentModels.cs" />
+    <Compile Include="Models\DocumentDefinition.cs" />
+    <Compile Include="Models\PersonInfo.cs" />
     <Compile Include="Models\PluginConfig.cs" />
-    <Compile Include="Models\PvModels.cs" />
-    <Compile Include="Models\SelectionTypes.cs" />
     <Compile Include="PluginEntry.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Services\BulkContext.cs" />
     <Compile Include="Services\ClauzeService.cs" />
+    <Compile Include="Services\DocumentRegistry.cs" />
+    <Compile Include="Services\DynamicTemplateEngine.cs" />
     <Compile Include="Services\ErpDataProvider.cs" />
-    <Compile Include="Services\PvTemplateEngine.cs" />
+    <Compile Include="Services\HookRegistry.cs" />
     <Compile Include="Services\RegistraturaService.cs" />
-    <Compile Include="Services\TemplateEngine.cs" />
     <Compile Include="Services\WordHelper.cs" />
-    <Compile Include="UI\ActAditionalForm.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="UI\AngajatMultiPickerDialog.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="UI\AngajatPickerDialog.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="UI\AvertismentDisciplinarForm.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="UI\BulkConfirmareDialog.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="UI\BulkRezultateDialog.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="UI\ButtonTheme.cs" />
-    <Compile Include="UI\CercetareDisciplinaraForm.cs" />
     <Compile Include="UI\ClauzeEditorDialog.cs">
       <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="UI\ClauzeEditorDialog.Designer.cs">
-      <DependentUpon>ClauzeEditorDialog.cs</DependentUpon>
     </Compile>
     <Compile Include="UI\ConfirmareDialog.cs">
       <SubType>Form</SubType>
     </Compile>
-    <Compile Include="UI\DecizieFormBase.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="UI\DeciziiIncetare.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="UI\DeciziiSuspendare.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="UI\DocumentFormBase.cs">
-      <SubType>Form</SubType>
-    </Compile>
     <Compile Include="UI\DocumentTheme.cs" />
-    <Compile Include="UI\EchipamentItemControl.cs">
+    <Compile Include="UI\DynamicForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="UI\PersonPickerDialog.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="UI\PunctModificareControl.cs">
       <SubType>Component</SubType>
-    </Compile>
-    <Compile Include="UI\FormBase.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="UI\PunctmodificareControl.cs">
-      <SubType>Component</SubType>
-    </Compile>
-    <Compile Include="UI\PvFormBase.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="UI\Pvforms.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="UI\ReferatDisciplinarForm.cs">
-      <SubType>Form</SubType>
     </Compile>
     <Compile Include="UI\SelectorDialog.cs">
       <SubType>Form</SubType>
@@ -247,21 +203,6 @@
       <DependentUpon>Resources.resx</DependentUpon>
       <DesignTime>True</DesignTime>
     </Compile>
-    <EmbeddedResource Include="UI\DeciziiSuspendare.resx">
-      <DependentUpon>DeciziiSuspendare.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="UI\DocumentFormBase.resx">
-      <DependentUpon>DocumentFormBase.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="UI\EchipamentItemControl.resx">
-      <DependentUpon>EchipamentItemControl.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="UI\PvFormBase.resx">
-      <DependentUpon>PvFormBase.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="UI\Pvforms.resx">
-      <DependentUpon>Pvforms.cs</DependentUpon>
-    </EmbeddedResource>
     <None Include="packages.config" />
     <None Include="Properties\Settings.settings">
       <Generator>SettingsSingleFileGenerator</Generator>
@@ -288,4 +229,9 @@
     <Error Condition="!Exists('packages\PdfiumViewer.Native.x86_64.v8-xfa.2018.4.8.256\build\PdfiumViewer.Native.x86_64.v8-xfa.props')" Text="$([System.String]::Format('$(ErrorText)', 'packages\PdfiumViewer.Native.x86_64.v8-xfa.2018.4.8.256\build\PdfiumViewer.Native.x86_64.v8-xfa.props'))" />
   </Target>
   <Import Project="packages\Costura.Fody.6.0.0\build\Costura.Fody.targets" Condition="Exists('packages\Costura.Fody.6.0.0\build\Costura.Fody.targets')" />
+  <PropertyGroup>
+    <PostBuildEvent>copy /Y "$(TargetPath)" "C:\Program Files (x86)\Soft1\Soft1 - Ice\$(TargetFileName)"
+copy /Y "$(TargetPath).config" "C:\Program Files (x86)\Soft1\Soft1 - Ice\$(TargetFileName).config"
+exit 0</PostBuildEvent>
+  </PropertyGroup>
 </Project>

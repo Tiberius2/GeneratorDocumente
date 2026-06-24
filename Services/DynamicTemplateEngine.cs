@@ -1,0 +1,457 @@
+﻿using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using DocumentFormat.OpenXml;
+using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Wordprocessing;
+using ActAditionalPlugin.Models;
+
+namespace ActAditionalPlugin.Services
+{
+    // ══════════════════════════════════════════════════════════
+    //  DYNAMIC TEMPLATE ENGINE
+    //
+    //  Primeste:
+    //    - DocumentDefinition (structura JSON)
+    //    - FormValues (Dictionary<string, object>) — valorile din formular
+    //    - CommonValues (date angajat + companie)
+    //
+    //  Produce:
+    //    - PDF final sau DOCX temp pentru preview
+    // ══════════════════════════════════════════════════════════
+    public static class DynamicTemplateEngine
+    {
+        // ══════════════════════════════════════════════════════
+        //  Entry points
+        // ══════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Genereaza PDF final in folderul angajatului.
+        /// </summary>
+        public static string GeneratePdf(
+            DocumentDefinition def,
+            Dictionary<string, object> formValues,
+            CommonDocumentValues common)
+        {
+            string basePath = Environment.GetEnvironmentVariable("RecruitmentDocsPath");
+            if (string.IsNullOrWhiteSpace(basePath))
+                throw new InvalidOperationException(
+                    "Variabila de sistem RecruitmentDocsPath nu este setata.");
+
+            string candidateFolder = string.Format("{0} - {1}",
+                common.PrsnId, common.NumeSalariat);
+            string outputDir = Path.Combine(basePath, candidateFolder);
+            if (!Directory.Exists(outputDir))
+                Directory.CreateDirectory(outputDir);
+
+            string pdfFileName = BuildPdfFileName(def, formValues, common);
+            string pdfPath = Path.Combine(outputDir, pdfFileName);
+            string tempDocx = Path.Combine(Path.GetTempPath(),
+                string.Format("doc_{0}_{1}.docx", common.PrsnId,
+                    Guid.NewGuid().ToString("N").Substring(0, 8)));
+
+            try
+            {
+                File.Copy(def.TemplatePath, tempDocx, true);
+                FillTemplate(tempDocx, def, formValues, common);
+                WordHelper.ConvertToPdf(tempDocx, pdfPath);
+            }
+            finally
+            {
+                if (File.Exists(tempDocx)) File.Delete(tempDocx);
+            }
+
+            return pdfPath;
+        }
+
+        /// <summary>
+        /// Genereaza DOCX temporar pentru preview (nu salveaza PDF final).
+        /// </summary>
+        public static string GeneratePreviewDocx(
+            DocumentDefinition def,
+            Dictionary<string, object> formValues,
+            CommonDocumentValues common)
+        {
+            string tempDocx = Path.Combine(Path.GetTempPath(),
+                string.Format("preview_{0}_{1}.docx", common.PrsnId,
+                    Guid.NewGuid().ToString("N").Substring(0, 8)));
+
+            File.Copy(def.TemplatePath, tempDocx, true);
+            FillTemplate(tempDocx, def, formValues, common);
+            return tempDocx;
+        }
+
+        // ══════════════════════════════════════════════════════
+        //  FILL TEMPLATE
+        // ══════════════════════════════════════════════════════
+        private static void FillTemplate(
+            string docxPath,
+            DocumentDefinition def,
+            Dictionary<string, object> formValues,
+            CommonDocumentValues common)
+        {
+            using (var doc = WordprocessingDocument.Open(docxPath, true))
+            {
+                var body = doc.MainDocumentPart.Document.Body;
+
+                // 1. Expandare liste dinamice (inainte de replace simplu)
+                ExpandDynamicLists(body, def, formValues);
+
+                // 2. Expandare tabele (ex. ActAditional — ModificareNr)
+                ExpandTableRows(body, def, formValues);
+
+                // 3. Build map placeholdere → valori
+                var map = BuildPlaceholderMap(def, formValues, common);
+
+                // 4. Replace in tot documentul
+                foreach (var para in body.Descendants<Paragraph>().ToList())
+                    WordHelper.MergeAndReplace(para, map);
+
+                doc.MainDocumentPart.Document.Save();
+            }
+        }
+
+        // ══════════════════════════════════════════════════════
+        //  EXPANDARE LISTE DINAMICE
+        //  Pentru fiecare camp de tip dynamic_list, gaseste
+        //  paragraful marker si il cloneaza per item.
+        // ══════════════════════════════════════════════════════
+        private static void ExpandDynamicLists(
+            Body body,
+            DocumentDefinition def,
+            Dictionary<string, object> formValues)
+        {
+            var listFields = def.Sections
+                .SelectMany(s => s.Fields)
+                .Where(f => f.Type == "dynamic_list")
+                .ToList();
+
+            foreach (var field in listFields)
+            {
+                if (!formValues.ContainsKey(field.Key)) continue;
+
+                var rows = formValues[field.Key] as List<Dictionary<string, string>>;
+                if (rows == null || rows.Count == 0) continue;
+
+                // Fiecare sub-camp al listei poate fi un placeholder expandabil
+                foreach (var itemField in field.ItemFields)
+                {
+                    string marker = "{{" + itemField.Key + "}}";
+                    ExpandParagraphOrRow(body, marker, rows, itemField.Key,
+                        field.ItemFields.Select(f2 => f2.Key).ToList());
+                }
+            }
+        }
+
+        /// <summary>
+        /// Gaseste paragraful/randul de tabel cu markerText si il expandeaza per item.
+        /// Daca markerul e in tabel → expandeaza TableRow.
+        /// Altfel → expandeaza Paragraph.
+        /// </summary>
+        private static void ExpandParagraphOrRow(
+            Body body,
+            string markerText,
+            List<Dictionary<string, string>> rows,
+            string primaryKey,
+            List<string> allKeys)
+        {
+            // Gaseste paragraful cu marker
+            Paragraph templatePara = null;
+            foreach (var para in body.Descendants<Paragraph>().ToList())
+            {
+                string text = string.Concat(
+                    para.Descendants<Text>().Select(t => t.Text));
+                if (text.Contains(markerText)) { templatePara = para; break; }
+            }
+            if (templatePara == null) return;
+
+            // Verifica daca e in TableRow
+            var parentRow = GetParentTableRow(templatePara);
+
+            if (parentRow != null)
+            {
+                // Expandare la nivel de rand de tabel
+                var tableParent = parentRow.Parent;
+                foreach (var row in rows)
+                {
+                    var cloneRow = (TableRow)parentRow.CloneNode(true);
+                    ApplyRowMap(cloneRow, row, allKeys);
+                    tableParent.InsertBefore(cloneRow, parentRow);
+                }
+                tableParent.RemoveChild(parentRow);
+            }
+            else
+            {
+                // Expandare la nivel de paragraf
+                var parent = templatePara.Parent;
+                foreach (var row in rows)
+                {
+                    var clone = (Paragraph)templatePara.CloneNode(true);
+                    ApplyParaMap(clone, row, allKeys);
+                    parent.InsertBefore(clone, templatePara);
+                }
+                parent.RemoveChild(templatePara);
+            }
+        }
+
+        private static void ApplyRowMap(
+            TableRow row,
+            Dictionary<string, string> values,
+            List<string> keys)
+        {
+            var map = keys.ToDictionary(
+                k => "{{" + k + "}}",
+                k => values.ContainsKey(k) ? values[k] : string.Empty);
+
+            foreach (var para in row.Descendants<Paragraph>().ToList())
+                WordHelper.MergeAndReplace(para, map);
+        }
+
+        private static void ApplyParaMap(
+            Paragraph para,
+            Dictionary<string, string> values,
+            List<string> keys)
+        {
+            var map = keys.ToDictionary(
+                k => "{{" + k + "}}",
+                k => values.ContainsKey(k) ? values[k] : string.Empty);
+
+            WordHelper.MergeAndReplace(para, map);
+        }
+
+        // ══════════════════════════════════════════════════════
+        //  EXPANDARE TABELE (ex. ActAditional: {{ModificareNr}})
+        //  Tip special: expand_table_row cu table_marker in JSON
+        // ══════════════════════════════════════════════════════
+        private static void ExpandTableRows(
+            Body body,
+            DocumentDefinition def,
+            Dictionary<string, object> formValues)
+        {
+            var tableFields = def.Sections
+                .SelectMany(s => s.Fields)
+                .Where(f => f.Type == "expand_table_row"
+                         && !string.IsNullOrEmpty(f.TableMarker))
+                .ToList();
+
+            foreach (var field in tableFields)
+            {
+                if (!formValues.ContainsKey(field.Key)) continue;
+
+                var rows = formValues[field.Key] as List<Dictionary<string, string>>;
+                if (rows == null || rows.Count == 0) continue;
+
+                string marker = "{{" + field.TableMarker + "}}";
+
+                // Gaseste tabelul si randul template
+                var table = body.Descendants<Table>()
+                    .FirstOrDefault(t => WordHelper.GetText(t).Contains(marker));
+                if (table == null) continue;
+
+                var templateRow = table.Descendants<TableRow>()
+                    .FirstOrDefault(r => WordHelper.GetText(r).Contains(marker));
+                if (templateRow == null) continue;
+
+                var allKeys = field.ItemFields.Select(f2 => f2.Key).ToList();
+
+                for (int i = 0; i < rows.Count; i++)
+                {
+                    var cloneRow = (TableRow)templateRow.CloneNode(true);
+                    // Adaugam si indexul (Nr.) automat
+                    var rowData = new Dictionary<string, string>(rows[i]);
+                    rowData[field.TableMarker] = (i + 1).ToString();
+                    ApplyRowMap(cloneRow, rowData, new List<string> { field.TableMarker }.Concat(allKeys).ToList());
+                    table.InsertBefore(cloneRow, templateRow);
+                }
+                table.RemoveChild(templateRow);
+            }
+        }
+
+        // ══════════════════════════════════════════════════════
+        //  BUILD PLACEHOLDER MAP
+        //  Combina valorile comune (angajat + companie) cu
+        //  valorile din formular intr-un singur dictionar.
+        // ══════════════════════════════════════════════════════
+        private static Dictionary<string, string> BuildPlaceholderMap(
+            DocumentDefinition def,
+            Dictionary<string, object> formValues,
+            CommonDocumentValues common)
+        {
+            var map = new Dictionary<string, string>();
+
+            // ── Valori comune angajat ──────────────────────────
+            map["{{NumeSalariat}}"] = common.NumeSalariat ?? string.Empty;
+            map["{{CNP}}"] = common.CNP ?? string.Empty;
+            map["{{Functie}}"] = common.Functie ?? string.Empty;
+            map["{{NumeDepartament}}"] = common.NumeDepartament ?? string.Empty;
+            map["{{NrCim}}"] = common.NrCim ?? string.Empty;
+            map["{{DataCim}}"] = common.DataCim != DateTime.MinValue
+                ? common.DataCim.ToString("dd.MM.yyyy") : string.Empty;
+            map["{{CodInregistrare}}"] = common.CodInregistrare ?? string.Empty;
+
+            // ── Valori comune companie ─────────────────────────
+            map["{{NumeAngajator}}"] = common.NumeAngajator ?? string.Empty;
+            map["{{CIFAngajator}}"] = common.CIFAngajator ?? string.Empty;
+            map["{{ReprezentantLegal}}"] = common.ReprezentantLegal ?? string.Empty;
+            map["{{FunctieReprezentant}}"] = common.FunctieReprezentant ?? string.Empty;
+            map["{{AdresaCompanie}}"] = common.AdresaCompanie ?? string.Empty;
+            map["{{ZipCompanie}}"] = common.ZipCompanie ?? string.Empty;
+            map["{{NrRegComertului}}"] = common.NrRegComertului ?? string.Empty;
+            map["{{IbanCompanie}}"] = common.IbanCompanie ?? string.Empty;
+            map["{{NrTelefonCompanie}}"] = common.NrTelefonCompanie ?? string.Empty;
+            map["{{EmailCompanie}}"] = common.EmailCompanie ?? string.Empty;
+            map["{{WebsiteCompanie}}"] = common.WebsiteCompanie ?? string.Empty;
+            map["{{MentiuniDocument}}"] = common.MentiuniDocument ?? string.Empty;
+
+            // ── Placeholder-e generate de hooks ───────────────
+            map["{{ArticolCompartiment}}"] = common.ArticolCompartiment ?? string.Empty;
+            map["{{ArticolContestatie}}"] = common.ArticolContestatie ?? string.Empty;
+
+            // ── Valori din formular ────────────────────────────
+            foreach (var kv in formValues)
+            {
+                // Listele dinamice si tabelele sunt deja expandate — sarim
+                if (kv.Value is List<Dictionary<string, string>>) continue;
+
+                string placeholder = "{{" + kv.Key + "}}";
+                map[placeholder] = kv.Value != null
+                    ? kv.Value.ToString()
+                    : string.Empty;
+            }
+
+            return map;
+        }
+
+        // ══════════════════════════════════════════════════════
+        //  HELPERS
+        // ══════════════════════════════════════════════════════
+        private static TableRow GetParentTableRow(OpenXmlElement element)
+        {
+            var current = element.Parent;
+            while (current != null)
+            {
+                var row = current as TableRow;
+                if (row != null) return row;
+                current = current.Parent;
+            }
+            return null;
+        }
+
+        private static string BuildPdfFileName(
+            DocumentDefinition def,
+            Dictionary<string, object> formValues,
+            CommonDocumentValues common)
+        {
+            string titleSafe = WordHelper.SanitizeFileName(def.Title);
+            string codInreg = WordHelper.SanitizeFileName(common.CodInregistrare ?? string.Empty);
+            string data = DateTime.Today.ToString("dd-MM-yyyy");
+
+            // Incearca sa foloseasca data din campul de registratura
+            if (!string.IsNullOrEmpty(def.RegistraturaDateField)
+                && formValues.ContainsKey(def.RegistraturaDateField))
+            {
+                DateTime d;
+                if (DateTime.TryParse(formValues[def.RegistraturaDateField]?.ToString(), out d))
+                    data = d.ToString("dd-MM-yyyy");
+            }
+
+            return string.Format("{0}_{1}_{2}.pdf", titleSafe, codInreg, data);
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  COMMON DOCUMENT VALUES
+    //  Date comune angajat + companie, populate din ERP
+    //  inainte de deschiderea formularului.
+    // ══════════════════════════════════════════════════════════
+    public class CommonDocumentValues
+    {
+        // ── Angajat ───────────────────────────────────────────
+        public int PrsnId { get; set; }
+        public string NumeSalariat { get; set; }
+        public string CNP { get; set; }
+        public string Functie { get; set; }
+        public string NumeDepartament { get; set; }
+        public string NrCim { get; set; }
+        public DateTime DataCim { get; set; }
+        public string CodInregistrare { get; set; }
+
+        // ── Companie ──────────────────────────────────────────
+        public string NumeAngajator { get; set; }
+        public string CIFAngajator { get; set; }
+        public string ReprezentantLegal { get; set; }
+        public string FunctieReprezentant { get; set; }
+        public string AdresaCompanie { get; set; }
+        public string ZipCompanie { get; set; }
+        public string NrRegComertului { get; set; }
+        public string IbanCompanie { get; set; }
+        public string NrTelefonCompanie { get; set; }
+        public string EmailCompanie { get; set; }
+        public string WebsiteCompanie { get; set; }
+
+        // ── Mentiuni + Articole (populate de hooks) ───────────
+        public string MentiuniDocument { get; set; }
+        public string ArticolCompartiment { get; set; }
+        public string ArticolContestatie { get; set; }
+
+        public CommonDocumentValues()
+        {
+            NumeSalariat = string.Empty;
+            CNP = string.Empty;
+            Functie = string.Empty;
+            NumeDepartament = string.Empty;
+            NrCim = string.Empty;
+            DataCim = DateTime.MinValue;
+            CodInregistrare = string.Empty;
+            NumeAngajator = string.Empty;
+            CIFAngajator = string.Empty;
+            ReprezentantLegal = string.Empty;
+            FunctieReprezentant = string.Empty;
+            AdresaCompanie = string.Empty;
+            ZipCompanie = string.Empty;
+            NrRegComertului = string.Empty;
+            IbanCompanie = string.Empty;
+            NrTelefonCompanie = string.Empty;
+            EmailCompanie = string.Empty;
+            WebsiteCompanie = string.Empty;
+            MentiuniDocument = string.Empty;
+            ArticolCompartiment = string.Empty;
+            ArticolContestatie = string.Empty;
+        }
+
+        /// <summary>
+        /// Populeaza din ErpCimData + ErpCompanyData (bridge catre vechiul sistem).
+        /// </summary>
+        public static CommonDocumentValues FromErp(
+            int prsnId,
+            string numeSalariat,
+            string cnp,
+            string functie,
+            ErpCimData cimData,
+            ErpCompanyData companyData)
+        {
+            return new CommonDocumentValues
+            {
+                PrsnId = prsnId,
+                NumeSalariat = numeSalariat,
+                CNP = cnp,
+                Functie = functie,
+                NumeDepartament = cimData.NumeDepartament,
+                NrCim = cimData.NrCim,
+                DataCim = cimData.DataCim,
+                NumeAngajator = companyData.NumeAngajator,
+                CIFAngajator = companyData.CIFAngajator,
+                ReprezentantLegal = companyData.ReprezentantLegal,
+                FunctieReprezentant = companyData.FunctieReprezentant,
+                AdresaCompanie = companyData.AdresaCompanie,
+                ZipCompanie = companyData.ZipCompanie,
+                NrRegComertului = companyData.NrRegComertului,
+                IbanCompanie = companyData.IbanCompanie,
+                NrTelefonCompanie = companyData.NrTelefonCompanie,
+                EmailCompanie = companyData.EmailCompanie,
+                WebsiteCompanie = companyData.WebsiteCompanie,
+            };
+        }
+    }
+}

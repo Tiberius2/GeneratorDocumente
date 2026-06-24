@@ -4,6 +4,19 @@ using Newtonsoft.Json;
 
 namespace ActAditionalPlugin.Models
 {
+    // Mutat din DocumentModels.cs (sters in noul sistem)
+    public class PunctModificare
+    {
+        public string Referinta { get; set; }
+        public string TextModificare { get; set; }
+
+        public PunctModificare()
+        {
+            Referinta = string.Empty;
+            TextModificare = string.Empty;
+        }
+    }
+
     public class CampClauza
     {
         [JsonProperty("label")] public string Label { get; set; }
