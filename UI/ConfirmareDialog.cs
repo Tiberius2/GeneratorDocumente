@@ -140,7 +140,7 @@ namespace ActAditionalPlugin.UI
             btnDa.FlatAppearance.BorderSize = 2;
             btnDa.MouseEnter += (s, e) => btnDa.BackColor = theme.AccentDark;
             btnDa.MouseLeave += (s, e) => btnDa.BackColor = theme.Accent;
-            btnDa.Click += (s, e) => { Confirmed = true; DialogResult = DialogResult.Yes; Close(); };
+            btnDa.Click += (s, e) => { Confirmed = true; DialogResult = DialogResult.OK; Close(); };
 
             var btnNu = new Button
             {

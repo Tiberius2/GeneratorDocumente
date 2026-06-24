@@ -29,12 +29,14 @@ namespace ActAditionalPlugin.UI
             "    ISNULL(P.SOTITLENAME, '') AS Functie, " +
             "    ISNULL(S.CODE, '') AS CodCor, " +
             "    ISNULL(PEX.CCCVARCHAR05, '') AS NrCim, " +
-            "    PEX.DATE03 AS DataCim " +
+            "    PEX.DATE03 AS DataCim, " +
+            "    ISNULL(D.NAME, '') AS NumeDepartament " +
             "FROM PRSN P " +
             "JOIN PRSEXTRA PEX ON PEX.PRSN = P.PRSN AND PEX.COMPANY = P.COMPANY " +
             "LEFT JOIN PRSJOBPOS PJ ON PJ.PRSN = P.PRSN AND PJ.COMPANY = P.COMPANY " +
             "LEFT JOIN JOBPOSITION J ON PJ.JOBPOSITION = J.JOBPOSITION " +
             "LEFT JOIN SPECIALTY S ON J.SPECIALTY = S.SPECIALTY " +
+            "LEFT JOIN DEPART D ON P.DEPART = D.DEPART AND D.COMPANY = P.COMPANY " +
             "WHERE P.COMPANY = {0} AND P.ISACTIVE = 1 " +
             "ORDER BY P.NAME, P.NAME2";
 
@@ -82,6 +84,7 @@ namespace ActAditionalPlugin.UI
                         Functie = ds[i, "Functie"]?.ToString()?.Trim() ?? string.Empty,
                         CodCor = ds[i, "CodCor"]?.ToString()?.Trim() ?? string.Empty,
                         NrCim = ds[i, "NrCim"]?.ToString()?.Trim() ?? string.Empty,
+                        NumeDepartament = ds[i, "NumeDepartament"]?.ToString()?.Trim() ?? string.Empty,
                     };
 
                     DateTime dataCim;

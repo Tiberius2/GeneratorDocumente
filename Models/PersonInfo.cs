@@ -17,6 +17,7 @@ namespace ActAditionalPlugin.Models
         public string CodCor { get; set; }  // SPECIALTY.CODE
         public string NrCim { get; set; }  // PRSEXTRA.CCCVARCHAR05
         public DateTime DataCim { get; set; }  // PRSEXTRA.DATE03
+        public string NumeDepartament { get; set; }  // DEPART.NAME
 
         public PersonInfo()
         {
@@ -28,6 +29,7 @@ namespace ActAditionalPlugin.Models
             CodCor = string.Empty;
             NrCim = string.Empty;
             DataCim = DateTime.MinValue;
+            NumeDepartament = string.Empty;
         }
 
         public string DataCimFormatata =>

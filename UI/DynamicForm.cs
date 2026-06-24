@@ -52,7 +52,7 @@ namespace ActAditionalPlugin.UI
         private readonly DocumentTheme _theme;
 
         // ── Split layout ───────────────────────────────────────
-        private Panel _pnlBody;
+        private PriorityScrollPanel _pnlBody;
         private PdfViewer _pdfViewer;
         private Label _lblPlaceholder;
         private Button _btnActualizeaza;
@@ -68,6 +68,7 @@ namespace ActAditionalPlugin.UI
         private static readonly Font FLabel = new Font("Segoe UI Semibold", 10f);
         private static readonly Font FInput = new Font("Segoe UI", 10f, FontStyle.Bold);
         private static readonly Font FSectiune = new Font("Segoe UI", 8f, FontStyle.Bold);
+        private const int MultilineHeight = 140; // inaltime standard pentru toate campurile multiline
 
         // ══════════════════════════════════════════════════════
         //  Constructor
@@ -268,7 +269,7 @@ namespace ActAditionalPlugin.UI
             var pnlAngajat = BuildAngajatSection();
 
             // ── PnlBody scrollabil ─────────────────────────────
-            _pnlBody = new Panel
+            _pnlBody = new PriorityScrollPanel
             {
                 Dock = DockStyle.Fill,
                 AutoScroll = true,
@@ -537,7 +538,8 @@ namespace ActAditionalPlugin.UI
                 if (sumPercent < 100)
                     percentList.Add(100 - sumPercent);
 
-                var tbl = AddRow(pnl, percentList.ToArray());
+                int rowHeight = rowFields.Max(FieldControlHeight) + 28;
+                var tbl = AddRow(pnl, percentList.ToArray(), rowHeight);
 
                 for (int i = 0; i < rowFields.Count; i++)
                 {
@@ -565,10 +567,11 @@ namespace ActAditionalPlugin.UI
 
                 case "date":
                     var dtp = MakeDtp();
+                    dtp.ValueChanged += (s, e) => RunHooks("on_change", null);
                     return dtp;
 
                 case "multiline":
-                    var ml = MakeMultiline(160);
+                    var ml = MakeMultiline(MultilineHeight);
                     if (!string.IsNullOrEmpty(field.Placeholder))
                         SetPlaceholder(ml, field.Placeholder);
                     return ml;
@@ -875,10 +878,11 @@ namespace ActAditionalPlugin.UI
         {
             // Camp simplu adaugat inline (fara sectiune proprie)
             // folosit pentru campuri mixte in sectiuni cu dynamic_list
-            var pnl = AddSectiune(field.Label, ref y, 62);
+            int rowHeight = FieldControlHeight(field) + 28;
+            var pnl = AddSectiune(field.Label, ref y, rowHeight + 8);
             var ctrl = BuildFieldControl(field);
             if (ctrl == null) return;
-            var tbl = AddRow(pnl, new[] { 100 });
+            var tbl = AddRow(pnl, new[] { 100 }, rowHeight);
             AddLabeledInput(tbl, 0, field.Label, ctrl, field.Required);
             _controls[field.Key] = ctrl;
         }
@@ -1359,13 +1363,17 @@ namespace ActAditionalPlugin.UI
             return pnlItems;
         }
 
-        private TableLayoutPanel AddRow(Panel parent, int[] percents)
+        // Inaltimea controlului in functie de tipul campului (multiline e mai mare)
+        private static int FieldControlHeight(FieldDefinition f) =>
+            f.Type == "multiline" ? MultilineHeight : 26;
+
+        private TableLayoutPanel AddRow(Panel parent, int[] percents, int height = 54)
         {
             var tbl = new TableLayoutPanel
             {
                 RowCount = 1,
                 ColumnCount = percents.Length,
-                Height = 54,
+                Height = height,
                 BackColor = Color.Transparent,
                 Padding = new Padding(0),
                 Margin = new Padding(0, 4, 0, 0),
@@ -1413,7 +1421,8 @@ namespace ActAditionalPlugin.UI
                 pnlLbl.Controls.Add(star);
             }
             ctrl.Dock = DockStyle.Top;
-            ctrl.Height = 26;
+            if (!(ctrl is TextBox tbHeight && tbHeight.Multiline))
+                ctrl.Height = 26;
             cell.Controls.Add(ctrl);
             cell.Controls.Add(pnlLbl);
             tbl.Controls.Add(cell, col, 0);
@@ -1524,6 +1533,7 @@ namespace ActAditionalPlugin.UI
                 case "Functie": return p.Functie;
                 case "CodCor": return p.CodCor;
                 case "NrCim": return p.NrCim;
+                case "NumeDepartament": return p.NumeDepartament;
                 case "DataCim": return p.DataCimFormatata;
                 case "NumeComplet_Functie":
                     return string.IsNullOrEmpty(p.Functie)
@@ -1542,7 +1552,7 @@ namespace ActAditionalPlugin.UI
             int h = 16; // padding
             foreach (var f in section.Fields.Where(f => f.Type != "dynamic_list"))
             {
-                h += f.Type == "multiline" ? 110 : 58;
+                h += f.Type == "multiline" ? MultilineHeight + 32 : 58;
             }
             return Math.Max(h, 62);
         }
@@ -1585,6 +1595,40 @@ namespace ActAditionalPlugin.UI
         {
             if (!string.IsNullOrEmpty(path) && File.Exists(path))
                 try { File.Delete(path); } catch { }
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  PANEL CU SCROLL PRIORITAR
+    //  Intercepteaza WM_MOUSEWHEEL inaintea unui control copil cu
+    //  focus (NumericUpDown, ComboBox, DateTimePicker) care altfel
+    //  ar consuma scroll-ul in loc sa lase panelul sa derulze.
+    // ══════════════════════════════════════════════════════════
+    public class PriorityScrollPanel : Panel, IMessageFilter
+    {
+        private const int WM_MOUSEWHEEL = 0x020A;
+
+        public PriorityScrollPanel()
+        {
+            AutoScroll = true;
+            HandleCreated += (s, e) => Application.AddMessageFilter(this);
+            HandleDestroyed += (s, e) => Application.RemoveMessageFilter(this);
+        }
+
+        public bool PreFilterMessage(ref Message m)
+        {
+            if (m.Msg != WM_MOUSEWHEEL || !IsHandleCreated || !Visible)
+                return false;
+
+            var screenPos = new Point(unchecked((short)(m.LParam.ToInt64() & 0xFFFF)),
+                                       unchecked((short)((m.LParam.ToInt64() >> 16) & 0xFFFF)));
+            if (!RectangleToScreen(ClientRectangle).Contains(screenPos))
+                return false;
+
+            int delta = unchecked((short)((m.WParam.ToInt64() >> 16) & 0xFFFF));
+            int newY = Math.Max(0, -AutoScrollPosition.Y - delta);
+            AutoScrollPosition = new Point(-AutoScrollPosition.X, newY);
+            return true; // consuma mesajul - nu mai ajunge la controlul cu focus
         }
     }
 
@@ -1840,7 +1884,6 @@ namespace ActAditionalPlugin.UI
                                 {
                                     tb2.Text = val;
                                     tb2.ForeColor = Color.FromArgb(25, 35, 55);
-                                    tb2.ReadOnly = true;
                                     tb2.BackColor = Color.FromArgb(235, 240, 255);
                                 }
                                 else if (targetCtrl is Button btnTarget)
@@ -1900,6 +1943,7 @@ namespace ActAditionalPlugin.UI
                 case "Functie": return p.Functie;
                 case "CodCor": return p.CodCor;
                 case "NrCim": return p.NrCim;
+                case "NumeDepartament": return p.NumeDepartament;
                 case "DataCim": return p.DataCimFormatata;
                 case "NumeComplet_Functie":
                     return string.IsNullOrEmpty(p.Functie)
