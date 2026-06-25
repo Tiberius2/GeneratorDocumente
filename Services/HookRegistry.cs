@@ -57,6 +57,9 @@ namespace ActAditionalPlugin.Services
             _handlers["SqlOnGenerate"] = SqlOnGenerate;
             _handlers["ConcatList"] = ConcatList;
             _handlers["CalcDataSfarsit"] = CalcDataSfarsit;
+            _handlers["CalcDataSfarsitDinCNP"] = CalcDataSfarsitDinCNP;
+            _handlers["CalcPerioadaSuspendare"] = CalcPerioadaSuspendare;
+            _handlers["SetDefault"] = SetDefault;
         }
 
         // ══════════════════════════════════════════════════════
@@ -268,6 +271,110 @@ namespace ActAditionalPlugin.Services
             if (!int.TryParse(luniVal?.ToString(), out luni) || luni <= 0) return;
 
             ctx.FormValues[targetField] = dataStart.AddMonths(luni).ToString("dd.MM.yyyy");
+        }
+
+        // ══════════════════════════════════════════════════════
+        //  HANDLER: CalcDataSfarsitDinCNP
+        //  Calculeaza DataEndSuspendare = DataNastere(din CNP) + AniSuspendare ani.
+        //  Se declanseaza on_change la modificarea CNPCopil sau AniSuspendare.
+        //
+        //  JSON: { "on": "on_change", "handler": "CalcDataSfarsitDinCNP",
+        //          "params": { "cnp_field": "CNPCopil",
+        //                      "ani_field": "AniSuspendare",
+        //                      "target_field": "DataEndSuspendare" } }
+        //
+        //  Format CNP: SAALLZZXXXXC
+        //    S  = sex/secol (1=M 1900, 2=F 1900, 5=M 2000, 6=F 2000 etc.)
+        //    AA = an (2 cifre), LL = luna, ZZ = zi
+        // ══════════════════════════════════════════════════════
+        private static void CalcDataSfarsitDinCNP(HookContext ctx)
+        {
+            string cnpField, aniField, targetField;
+            if (!ctx.Params.TryGetValue("cnp_field", out cnpField)) return;
+            if (!ctx.Params.TryGetValue("ani_field", out aniField)) return;
+            if (!ctx.Params.TryGetValue("target_field", out targetField)) return;
+
+            object cnpObj, aniObj;
+            if (!ctx.FormValues.TryGetValue(cnpField, out cnpObj)) return;
+            if (!ctx.FormValues.TryGetValue(aniField, out aniObj)) return;
+
+            string cnp = cnpObj?.ToString()?.Trim() ?? string.Empty;
+            if (cnp.Length != 13) return;
+
+            int ani;
+            if (!int.TryParse(aniObj?.ToString(), out ani) || ani <= 0) return;
+
+            // Extrage data nasterii din CNP
+            DateTime dataNastere;
+            try
+            {
+                int s = int.Parse(cnp.Substring(0, 1));
+                int aa = int.Parse(cnp.Substring(1, 2));
+                int ll = int.Parse(cnp.Substring(3, 2));
+                int zz = int.Parse(cnp.Substring(5, 2));
+
+                int an;
+                if (s == 1 || s == 2) an = 1900 + aa;
+                else if (s == 3 || s == 4) an = 1800 + aa;
+                else if (s == 5 || s == 6) an = 2000 + aa;
+                else if (s == 7 || s == 8) an = 2000 + aa; // rezidenti
+                else return;
+
+                dataNastere = new DateTime(an, ll, zz);
+            }
+            catch { return; }
+
+            // DataEnd = DataNastere + AniSuspendare ani
+            DateTime dataEnd = dataNastere.AddYears(ani);
+            ctx.FormValues[targetField] = dataEnd.ToString("dd.MM.yyyy");
+        }
+
+        // ══════════════════════════════════════════════════════
+        //  HANDLER: CalcPerioadaSuspendare
+        //  Converteste AniSuspendare (numar) in text pentru {{PerioadaSuspendare}}
+        //  ex. 2 → "2 ani", 1 → "1 an"
+        //
+        //  JSON: { "on": "on_generate", "handler": "CalcPerioadaSuspendare",
+        //          "params": { "ani_field": "AniSuspendare",
+        //                      "target_field": "PerioadaSuspendare" } }
+        // ══════════════════════════════════════════════════════
+        private static void CalcPerioadaSuspendare(HookContext ctx)
+        {
+            string aniField, targetField;
+            if (!ctx.Params.TryGetValue("ani_field", out aniField)) return;
+            if (!ctx.Params.TryGetValue("target_field", out targetField)) return;
+
+            object aniObj;
+            if (!ctx.FormValues.TryGetValue(aniField, out aniObj)) return;
+
+            int ani;
+            if (!int.TryParse(aniObj?.ToString(), out ani) || ani <= 0) return;
+
+            ctx.FormValues[targetField] = ani == 1 ? "1 an" : ani + " ani";
+        }
+
+        // ══════════════════════════════════════════════════════
+        //  HANDLER: SetDefault
+        //  Seteaza valoarea unui camp la deschidere daca e gol / zero.
+        //  Util pentru NumericUpDown cu valoare default specifica per document.
+        //
+        //  JSON: { "on": "on_open", "handler": "SetDefault",
+        //          "params": { "field": "AniSuspendare", "value": "2" } }
+        // ══════════════════════════════════════════════════════
+        private static void SetDefault(HookContext ctx)
+        {
+            string field, value;
+            if (!ctx.Params.TryGetValue("field", out field)) return;
+            if (!ctx.Params.TryGetValue("value", out value)) return;
+
+            object existing;
+            bool isEmpty = !ctx.FormValues.TryGetValue(field, out existing)
+                        || existing == null
+                        || existing.ToString() == "0"
+                        || string.IsNullOrWhiteSpace(existing.ToString());
+
+            if (isEmpty)
+                ctx.FormValues[field] = value;
         }
 
         public static void Register(string name, Action<HookContext> handler)

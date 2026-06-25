@@ -39,8 +39,10 @@ namespace ActAditionalPlugin.UI
         private readonly Dictionary<string, Panel> _listPanels
             = new Dictionary<string, Panel>();
 
-        // ── Mentiuni (toggle) ─────────────────────────────────
+        // ── Mentiuni (toggle) — panel fix deasupra footer-ului ─
         private Panel _pnlMentiuni;
+        private Panel _pnlMentiuniWrapper; // containerul fix din split.Panel1
+        private CheckBox _chkMentiuni;
 
         // ── Controale clauze Act Aditional ─────────────────────
         private readonly Dictionary<string, List<PunctModificareControl>> _clauzeControls
@@ -60,6 +62,7 @@ namespace ActAditionalPlugin.UI
         private bool _previewDone;
         private TextBox _txtCodInregistrare;
         private TextBox _txtMentiuni;
+        private bool _hooksRunning; // guard re-intrare RunHooks
 
         // ── Constante vizuale ──────────────────────────────────
         private static readonly Color FundalForm = Color.FromArgb(242, 245, 250);
@@ -117,61 +120,12 @@ namespace ActAditionalPlugin.UI
         }
 
         // ══════════════════════════════════════════════════════
-        //  SHELL (split 40/60 cu header, footer, pdf viewer)
+        //  SHELL (split 40/60, fara header separat)
+        //  Titlul + angajat sunt primul element din _pnlBody.
+        //  split.Panel1 = doar footer(Bottom) + mentiuni(Bottom) + body(Fill)
         // ══════════════════════════════════════════════════════
         private void BuildShell()
         {
-            // Header
-            var pnlHeader = new Panel
-            {
-                Dock = DockStyle.Top,
-                Height = 50,
-                BackColor = _theme.Accent
-            };
-            pnlHeader.Controls.Add(new Label
-            {
-                Text = _def.Title,
-                Font = new Font("Segoe UI", 13f, FontStyle.Bold),
-                ForeColor = Color.White,
-                AutoSize = true,
-                Location = new Point(18, 12)
-            });
-
-            // ── Cod inregistrare in dreapta header-ului ───────
-            var lblCodHdr = new Label
-            {
-                Text = "Cod înregistrare:",
-                Font = new Font("Segoe UI", 10f),
-                ForeColor = Color.FromArgb(200, 225, 255),
-                AutoSize = true,
-                Anchor = AnchorStyles.Right | AnchorStyles.Top
-            };
-            _txtCodInregistrare = new TextBox
-            {
-                ReadOnly = true,
-                Font = new Font("Segoe UI", 13f, FontStyle.Bold),
-                BackColor = Color.FromArgb(50, 75, 120),
-                ForeColor = Color.White,
-                BorderStyle = BorderStyle.FixedSingle,
-                TextAlign = HorizontalAlignment.Center,
-                Width = 140,
-                Anchor = AnchorStyles.Right | AnchorStyles.Top
-            };
-            pnlHeader.Controls.AddRange(new Control[] { lblCodHdr, _txtCodInregistrare });
-
-            // Pozitionare initiala + la resize
-            Action positionCodHdr = () =>
-            {
-                if (pnlHeader.Width == 0) return;
-                _txtCodInregistrare.Left = pnlHeader.Width - _txtCodInregistrare.Width - 14;
-                _txtCodInregistrare.Top = (pnlHeader.Height - _txtCodInregistrare.Height) / 2;
-                lblCodHdr.Left = _txtCodInregistrare.Left - lblCodHdr.Width - 6;
-                lblCodHdr.Top = _txtCodInregistrare.Top +
-                    (_txtCodInregistrare.Height - lblCodHdr.Height) / 2;
-            };
-            pnlHeader.Resize += (s, e) => positionCodHdr();
-            pnlHeader.Paint += (s, e) => positionCodHdr();
-
             // Split
             var split = new SplitContainer
             {
@@ -183,7 +137,7 @@ namespace ActAditionalPlugin.UI
                 SplitterWidth = 3
             };
 
-            // ── Footer sidebar ─────────────────────────────────
+            // ── Footer ────────────────────────────────────────
             var pnlFooter = new Panel
             {
                 Dock = DockStyle.Bottom,
@@ -196,62 +150,27 @@ namespace ActAditionalPlugin.UI
                     e.Graphics.DrawLine(pen, 0, 0, pnlFooter.Width, 0);
             };
 
-            var btnInapoi = new Button
-            {
-                Text = "  Anulare",
-                Height = 36,
-                Width = 130,
-                FlatStyle = FlatStyle.Flat,
-                BackColor = Color.FromArgb(255, 220, 220),
-                ForeColor = Color.FromArgb(160, 40, 40),
-                Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
-                Cursor = Cursors.Hand,
-                Top = 10,
-                Left = 12,
-                Anchor = AnchorStyles.Left | AnchorStyles.Top,
-                Image = ResizeImage(Properties.Resources.back_arrow, 20, 20),
-                ImageAlign = ContentAlignment.MiddleCenter,
-                TextAlign = ContentAlignment.MiddleCenter,
-                TextImageRelation = TextImageRelation.ImageBeforeText
-            };
+            var btnInapoi = MakeFooterButton("  Anulare", Properties.Resources.back_arrow,
+                Color.FromArgb(255, 220, 220), Color.FromArgb(160, 40, 40));
+            btnInapoi.Left = 12;
+            btnInapoi.Anchor = AnchorStyles.Left | AnchorStyles.Top;
             btnInapoi.FlatAppearance.BorderSize = 1;
             btnInapoi.FlatAppearance.BorderColor = Color.FromArgb(220, 150, 150);
             btnInapoi.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
 
-            _btnActualizeaza = new Button
-            {
-                Text = " Previzualizează",
-                Height = 36,
-                Width = 200,
-                FlatStyle = FlatStyle.Flat,
-                BackColor = Color.FromArgb(255, 243, 176),
-                ForeColor = Color.FromArgb(120, 90, 10),
-                Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
-                Cursor = Cursors.Hand,
-                Top = 10,
-                Anchor = AnchorStyles.Right | AnchorStyles.Top,
-                Image = ResizeImage(Properties.Resources.refreshPreview, 12, 12),
-                TextImageRelation = TextImageRelation.ImageBeforeText
-            };
+            _btnActualizeaza = MakeFooterButton(" Previzualizează", Properties.Resources.refreshPreview,
+                Color.FromArgb(255, 243, 176), Color.FromArgb(120, 90, 10));
+            _btnActualizeaza.Width = 200;
+            _btnActualizeaza.Anchor = AnchorStyles.Right | AnchorStyles.Top;
             _btnActualizeaza.FlatAppearance.BorderSize = 3;
             _btnActualizeaza.FlatAppearance.BorderColor = Color.FromArgb(240, 200, 80);
             _btnActualizeaza.Click += OnPreview;
 
-            var btnGenereaza = new Button
-            {
-                Text = "  Generează PDF",
-                Height = 36,
-                Width = 180,
-                FlatStyle = FlatStyle.Flat,
-                BackColor = _theme.Accent,
-                ForeColor = Color.White,
-                Font = new Font("Segoe UI", 10f, FontStyle.Bold),
-                Cursor = Cursors.Hand,
-                Top = 10,
-                Anchor = AnchorStyles.Right | AnchorStyles.Top,
-                Image = ResizeImage(Properties.Resources.documentOK, 20, 20),
-                TextImageRelation = TextImageRelation.ImageBeforeText
-            };
+            var btnGenereaza = MakeFooterButton("  Generează PDF", Properties.Resources.documentOK,
+                _theme.Accent, Color.White);
+            btnGenereaza.Width = 180;
+            btnGenereaza.Font = new Font("Segoe UI", 10f, FontStyle.Bold);
+            btnGenereaza.Anchor = AnchorStyles.Right | AnchorStyles.Top;
             btnGenereaza.FlatAppearance.BorderSize = 3;
             btnGenereaza.FlatAppearance.BorderColor = _theme.AccentDark;
             btnGenereaza.MouseEnter += (s, e) => btnGenereaza.BackColor = _theme.AccentDark;
@@ -265,10 +184,7 @@ namespace ActAditionalPlugin.UI
                 _btnActualizeaza.Left = btnGenereaza.Left - _btnActualizeaza.Width - 10;
             };
 
-            // ── Sectiunea angajat (readonly, mereu vizibila) ───
-            var pnlAngajat = BuildAngajatSection();
-
-            // ── PnlBody scrollabil ─────────────────────────────
+            // ── Body scrollabil ────────────────────────────────
             _pnlBody = new PriorityScrollPanel
             {
                 Dock = DockStyle.Fill,
@@ -277,9 +193,49 @@ namespace ActAditionalPlugin.UI
                 BackColor = FundalForm
             };
 
-            split.Panel1.Controls.Add(_pnlBody);
-            split.Panel1.Controls.Add(pnlAngajat);
-            split.Panel1.Controls.Add(pnlFooter);
+            // ── Panel fix mentiuni ─────────────────────────────
+            _pnlMentiuniWrapper = BuildMentiuniWrapper();
+
+            // ── SplitContainer vertical intern: sus=body, jos=footer+mentiuni ──
+            // Folosim SplitContainer pentru izolare perfecta — scrollbarul body-ului
+            // nu poate depasi niciodata zona de jos (footer + mentiuni).
+            var innerSplit = new SplitContainer
+            {
+                Dock = DockStyle.Fill,
+                Orientation = Orientation.Horizontal,
+                IsSplitterFixed = false,
+                SplitterWidth = 1,
+                BackColor = Color.FromArgb(210, 220, 235),
+                Panel1MinSize = 100,
+                Panel2MinSize = 56
+            };
+
+            innerSplit.Panel1.Controls.Add(_pnlBody);
+
+            // Panel jos: mentiuni (Bottom) + footer (Bottom) + spatiu Fill gol
+            var pnlJos = new Panel { Dock = DockStyle.Fill, BackColor = FundalForm };
+            pnlJos.Controls.Add(pnlFooter);          // Bottom
+            pnlJos.Controls.Add(_pnlMentiuniWrapper); // Bottom (deasupra footer)
+
+            innerSplit.Panel2.Controls.Add(pnlJos);
+
+            // Inaltimea panel-ului jos = footer (56) + mentiuni (34 initial)
+            // Se ajusteaza cand mentiunile sunt activate
+            innerSplit.SplitterDistance = 9999; // va fi recalculat la Shown
+            _pnlMentiuniWrapper.SizeChanged += (s, e) =>
+            {
+                int josH = pnlFooter.Height + _pnlMentiuniWrapper.Height;
+                if (innerSplit.Height > josH + innerSplit.Panel1MinSize)
+                    innerSplit.SplitterDistance = innerSplit.Height - josH - innerSplit.SplitterWidth;
+            };
+            innerSplit.Resize += (s, e) =>
+            {
+                int josH = pnlFooter.Height + _pnlMentiuniWrapper.Height;
+                if (innerSplit.Height > josH + innerSplit.Panel1MinSize)
+                    innerSplit.SplitterDistance = innerSplit.Height - josH - innerSplit.SplitterWidth;
+            };
+
+            split.Panel1.Controls.Add(innerSplit);
 
             // ── PDF viewer dreapta ─────────────────────────────
             _lblPlaceholder = new Label
@@ -306,7 +262,6 @@ namespace ActAditionalPlugin.UI
             split.Panel2.Controls.Add(_lblPlaceholder);
 
             Controls.Add(split);
-            Controls.Add(pnlHeader);
 
             split.Resize += (s, e) =>
             {
@@ -316,6 +271,165 @@ namespace ActAditionalPlugin.UI
         }
 
         // ── Sectiunea angajat extinsa (readonly, mereu vizibila) ──
+        // ── Titlu document + Cod inregistrare (in body, scrollabil) ──
+        private void BuildTitluSection(ref int y)
+        {
+            int initW = Math.Max(_pnlBody.ClientSize.Width - _pnlBody.Padding.Horizontal, 400);
+
+            var pnl = new Panel
+            {
+                Left = 0,
+                Top = y,
+                Height = 46,
+                Width = initW,
+                BackColor = _theme.Accent,
+                Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top
+            };
+
+            pnl.Controls.Add(new Label
+            {
+                Text = _def.Title,
+                Font = new Font("Segoe UI", 13f, FontStyle.Bold),
+                ForeColor = Color.White,
+                AutoSize = true,
+                Location = new Point(14, 10)
+            });
+
+            // Cod inregistrare dreapta
+            var lblCod = new Label
+            {
+                Text = "Cod înregistrare:",
+                Font = new Font("Segoe UI", 9f),
+                ForeColor = Color.FromArgb(200, 225, 255),
+                AutoSize = true,
+                Anchor = AnchorStyles.Right | AnchorStyles.Top
+            };
+            _txtCodInregistrare = new TextBox
+            {
+                ReadOnly = true,
+                Font = new Font("Segoe UI", 12f, FontStyle.Bold),
+                BackColor = Color.FromArgb(50, 75, 120),
+                ForeColor = Color.White,
+                BorderStyle = BorderStyle.FixedSingle,
+                TextAlign = HorizontalAlignment.Center,
+                Width = 130,
+                Anchor = AnchorStyles.Right | AnchorStyles.Top
+            };
+            pnl.Controls.AddRange(new Control[] { lblCod, _txtCodInregistrare });
+
+            Action pos = () =>
+            {
+                if (pnl.Width == 0) return;
+                _txtCodInregistrare.Left = pnl.Width - _txtCodInregistrare.Width - 14;
+                _txtCodInregistrare.Top = (pnl.Height - _txtCodInregistrare.Height) / 2;
+                lblCod.Left = _txtCodInregistrare.Left - lblCod.Width - 6;
+                lblCod.Top = _txtCodInregistrare.Top + (_txtCodInregistrare.Height - lblCod.Height) / 2;
+            };
+            pnl.Resize += (s, e) => pos();
+            pnl.Paint += (s, e) => pos();
+
+            _pnlBody.Controls.Add(pnl);
+            _pnlBody.Resize += (s, e) =>
+                pnl.Width = _pnlBody.ClientSize.Width - _pnlBody.Padding.Horizontal;
+            y += 50;
+        }
+
+        // ── Date angajat in body (scrollabil) ─────────────────
+        private void BuildAngajatInBody(ref int y)
+        {
+            int initW = Math.Max(_pnlBody.ClientSize.Width - _pnlBody.Padding.Horizontal, 400);
+
+            var pnl = new Panel
+            {
+                Left = 0,
+                Top = y,
+                Height = 128,
+                Width = initW,
+                BackColor = Color.White,
+                Padding = new Padding(12, 4, 12, 4),
+                Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top
+            };
+            pnl.Paint += (s, e) =>
+            {
+                using (var pen = new Pen(Color.FromArgb(210, 220, 235)))
+                    e.Graphics.DrawLine(pen, 0, pnl.Height - 1, pnl.Width, pnl.Height - 1);
+                e.Graphics.FillRectangle(new SolidBrush(_theme.Accent), 0, 0, 4, pnl.Height);
+            };
+
+            pnl.Controls.Add(new Label
+            {
+                Text = "DATE ANGAJAT",
+                Font = FSectiune,
+                ForeColor = _theme.Accent,
+                AutoSize = true,
+                Location = new Point(14, 4)
+            });
+
+            // Rand 1: Angajat | CNP | Functie
+            var tbl1 = new TableLayoutPanel
+            {
+                Left = 14,
+                Top = 22,
+                Height = 44,
+                RowCount = 2,
+                ColumnCount = 3,
+                BackColor = Color.Transparent,
+                Padding = new Padding(0),
+                Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top
+            };
+            tbl1.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40f));
+            tbl1.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30f));
+            tbl1.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30f));
+            tbl1.RowStyles.Add(new RowStyle(SizeType.Absolute, 18f));
+            tbl1.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+            tbl1.Controls.Add(MakeAngajatLabel("Angajat"), 0, 0);
+            tbl1.Controls.Add(MakeAngajatLabel("CNP"), 1, 0);
+            tbl1.Controls.Add(MakeAngajatLabel("Funcție"), 2, 0);
+            tbl1.Controls.Add(MakeAngajatField(_common.NumeSalariat), 0, 1);
+            tbl1.Controls.Add(MakeAngajatField(_common.CNP), 1, 1);
+            tbl1.Controls.Add(MakeAngajatField(_common.Functie), 2, 1);
+
+            // Rand 2: Nr. CIM | Data CIM | Departament
+            var tbl2 = new TableLayoutPanel
+            {
+                Left = 14,
+                Top = 70,
+                Height = 44,
+                RowCount = 2,
+                ColumnCount = 3,
+                BackColor = Color.Transparent,
+                Padding = new Padding(0),
+                Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top
+            };
+            tbl2.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25f));
+            tbl2.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25f));
+            tbl2.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+            tbl2.RowStyles.Add(new RowStyle(SizeType.Absolute, 18f));
+            tbl2.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+            tbl2.Controls.Add(MakeAngajatLabel("Nr. CIM"), 0, 0);
+            tbl2.Controls.Add(MakeAngajatLabel("Data CIM"), 1, 0);
+            tbl2.Controls.Add(MakeAngajatLabel("Departament"), 2, 0);
+            tbl2.Controls.Add(MakeAngajatField(_common.NrCim), 0, 1);
+            tbl2.Controls.Add(MakeAngajatField(
+                _common.DataCim != DateTime.MinValue
+                    ? _common.DataCim.ToString("dd.MM.yyyy") : string.Empty), 1, 1);
+            tbl2.Controls.Add(MakeAngajatField(_common.NumeDepartament), 2, 1);
+
+            pnl.Controls.Add(tbl1);
+            pnl.Controls.Add(tbl2);
+            pnl.Resize += (s, e) =>
+            {
+                tbl1.Width = pnl.ClientSize.Width - 28;
+                tbl2.Width = pnl.ClientSize.Width - 28;
+            };
+
+            _pnlBody.Controls.Add(pnl);
+            _pnlBody.Resize += (s, e) =>
+                pnl.Width = _pnlBody.ClientSize.Width - _pnlBody.Padding.Horizontal;
+            y += 132;
+        }
+
+        // ── Sectiunea angajat (folosita anterior, pastrata pentru compatibilitate) ──
         private Panel BuildAngajatSection()
         {
             var pnl = new Panel
@@ -444,8 +558,13 @@ namespace ActAditionalPlugin.UI
         {
             int y = 0;
 
-            // Sectiunile din JSON — toate se construiesc normal
-            // Cod inregistrare e in header (dreapta sus), nu in body
+            // ── Titlu + Cod inregistrare (primul element scrollabil) ──
+            BuildTitluSection(ref y);
+
+            // ── Date angajat (scrollabil, parte din body) ─────
+            BuildAngajatInBody(ref y);
+
+            // Sectiunile din JSON
             foreach (var section in _def.Sections)
             {
                 BuildSection(section, ref y);
@@ -462,7 +581,9 @@ namespace ActAditionalPlugin.UI
                     dtp.ValueChanged += (s, e) => RecalcCodInregistrare(dtp.Value.Date);
             }
 
-            AddMentiuniSection(ref y);
+            // Seteaza inaltimea minima de scroll astfel incat tot continutul sa fie accesibil
+            int totalH = y + 20;
+            _pnlBody.AutoScrollMinSize = new System.Drawing.Size(0, totalH);
         }
 
         private void BuildSection(SectionDefinition section, ref int y)
@@ -480,6 +601,10 @@ namespace ActAditionalPlugin.UI
 
             if (hasDynamicList)
             {
+                // Afiseaza titlul sectiunii inainte de campurile listei
+                if (!string.IsNullOrWhiteSpace(section.Title))
+                    AddSectiuneHeader(section.Title, ref y);
+
                 foreach (var field in section.Fields)
                 {
                     if (field.Type == "dynamic_list")
@@ -606,6 +731,13 @@ namespace ActAditionalPlugin.UI
                         tb.Text = field.Default;
                     else if (!string.IsNullOrEmpty(field.Placeholder))
                         SetPlaceholder(tb, field.Placeholder);
+                    // Daca acest camp e referit ca cnp_field intr-un hook on_change,
+                    // triggheruim on_change la fiecare modificare a textului
+                    bool isOnChangeField = _def.Hooks != null && _def.Hooks.Any(h =>
+                        h.On == "on_change" && h.Params != null &&
+                        h.Params.Values.Any(v => v == field.Key));
+                    if (isOnChangeField)
+                        tb.TextChanged += (s, e) => { if (tb.ForeColor != Color.Gray) RunHooks("on_change", null); };
                     return tb;
             }
         }
@@ -804,7 +936,7 @@ namespace ActAditionalPlugin.UI
             _pnlBody.Resize += (s, e) => pnlHdr.Width = _pnlBody.ClientSize.Width - _pnlBody.Padding.Horizontal;
             y += 38;
 
-            // Panel iteme clauze
+            // Panel iteme clauze — se redimensioneaza la resize pentru a umple spatiul ramas
             var pnlItems = new Panel
             {
                 Left = 0,
@@ -816,9 +948,19 @@ namespace ActAditionalPlugin.UI
                 Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top
             };
             _pnlBody.Controls.Add(pnlItems);
+            pnlItems.Paint += (s, e) =>
+            {
+                using (var pen = new Pen(_theme.AccentBorder, 2f))
+                    e.Graphics.DrawRectangle(pen, 1, 1, pnlItems.Width - 3, pnlItems.Height - 3);
+                e.Graphics.FillRectangle(new SolidBrush(_theme.Accent), 0, 0, 4, pnlItems.Height);
+            };
+            int clauzeTop = y; // captureaza y-ul la care incepe panelul
             _pnlBody.Resize += (s, e) =>
             {
                 pnlItems.Width = _pnlBody.ClientSize.Width - _pnlBody.Padding.Horizontal;
+                // Redimensioneaza inaltimea sa umple spatiul ramas din body
+                int available = _pnlBody.ClientSize.Height - clauzeTop - 8;
+                if (available > 100) pnlItems.Height = available;
                 foreach (Control c in pnlItems.Controls)
                     c.Width = Math.Max(pnlItems.ClientSize.Width - 4, 380);
             };
@@ -841,6 +983,7 @@ namespace ActAditionalPlugin.UI
                     for (int i = 0; i < puncte.Count; i++) puncte[i].Numar = i + 1;
                     RelayoutPunctModificare(pnlItems, puncte);
                 };
+                ctrl.OnHeightChanged = () => RelayoutPunctModificare(pnlItems, puncte);
                 puncte.Add(ctrl);
                 pnlItems.Controls.Add(ctrl);
                 RelayoutPunctModificare(pnlItems, puncte);
@@ -866,7 +1009,7 @@ namespace ActAditionalPlugin.UI
             addPunct();
         }
 
-        private static void RelayoutPunctModificare(Panel pnl,
+        private void RelayoutPunctModificare(Panel pnl,
             System.Collections.Generic.List<PunctModificareControl> items)
         {
             int w = Math.Max(pnl.ClientSize.Width - 4, 380);
@@ -887,90 +1030,103 @@ namespace ActAditionalPlugin.UI
             _controls[field.Key] = ctrl;
         }
 
-        // ── Sectiunea de mentiuni cu toggle ───────────────────
-        private void AddMentiuniSection(ref int y)
-        {
-            int initW = Math.Max(_pnlBody.ClientSize.Width - _pnlBody.Padding.Horizontal, 400);
 
-            // Rand cu bifa
-            var pnlToggle = new Panel
+
+        // ══════════════════════════════════════════════════════
+        //  MENTIUNI — panel fix ancorat deasupra footer-ului
+        //  Dock = Bottom in split.Panel1.
+        //  La bifare apare panoul cu textarea deasupra bifei.
+        // ══════════════════════════════════════════════════════
+        private Panel BuildMentiuniWrapper()
+        {
+            const int ChkH = 34;
+            const int MentiuniH = 116; // header 24 + textarea 80 + padding 12
+
+            var wrapper = new Panel
+            {
+                Dock = DockStyle.Bottom,
+                Height = ChkH,
+                BackColor = Color.FromArgb(248, 249, 252)
+            };
+            wrapper.Paint += (s, e) =>
+            {
+                using (var pen = new Pen(_theme.AccentBorder))
+                    e.Graphics.DrawLine(pen, 0, 0, wrapper.Width, 0);
+            };
+
+            // ── Panel mentiuni (deasupra bifei, initial ascuns) ─
+            _pnlMentiuni = new Panel
             {
                 Left = 0,
-                Top = y,
-                Height = 28,
-                BackColor = Color.Transparent,
-                Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top,
-                Width = initW
+                Top = 0,
+                Height = MentiuniH,
+                BackColor = Color.White,
+                Visible = false,
+                Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top
             };
-            var chkMentiuni = new CheckBox
+            _pnlMentiuni.Paint += (s, e) =>
+            {
+                using (var pen = new Pen(_theme.AccentBorder))
+                    e.Graphics.DrawLine(pen, 0, 0, _pnlMentiuni.Width, 0);
+                e.Graphics.FillRectangle(new SolidBrush(_theme.Accent), 0, 0, 4, _pnlMentiuni.Height);
+            };
+            _pnlMentiuni.Controls.Add(new Label
+            {
+                Text = "MENȚIUNI / OBSERVAȚII",
+                Font = new Font("Segoe UI Semibold", 9f),
+                ForeColor = _theme.AccentDark,
+                AutoSize = true,
+                Location = new Point(14, 4)
+            });
+            _txtMentiuni = new TextBox
+            {
+                Multiline = true,
+                ScrollBars = ScrollBars.Vertical,
+                Font = new Font("Segoe UI", 10f),
+                BackColor = Color.White,
+                ForeColor = TextPrincipal,
+                BorderStyle = BorderStyle.FixedSingle,
+                Location = new Point(14, 26),
+                Height = 80,
+                Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top
+            };
+            _pnlMentiuni.Controls.Add(_txtMentiuni);
+            _pnlMentiuni.Resize += (s, e) =>
+                _txtMentiuni.Width = _pnlMentiuni.ClientSize.Width - 28;
+
+            // ── Bifa (mereu vizibila, jos in wrapper) ──────────
+            _chkMentiuni = new CheckBox
             {
                 Text = "Adaugă mențiuni (nu apar în PDF)",
                 Font = new Font("Segoe UI", 9f),
                 ForeColor = TextSecundar,
                 AutoSize = true,
-                Location = new Point(2, 6),
-                Checked = false
+                Left = 12,
+                Top = 8,
+                Anchor = AnchorStyles.Left | AnchorStyles.Bottom
             };
-            pnlToggle.Controls.Add(chkMentiuni);
-            _pnlBody.Controls.Add(pnlToggle);
-            _pnlBody.Resize += (s, e) => pnlToggle.Width = _pnlBody.ClientSize.Width - _pnlBody.Padding.Horizontal;
-            y += 32;
+            wrapper.Controls.Add(_pnlMentiuni);
+            wrapper.Controls.Add(_chkMentiuni);
 
-            // Panoul de mentiuni (initial ascuns)
-            _pnlMentiuni = new FlowLayoutPanel
+            // ── La resize, mentiuni ocupa toata latimea ─────────
+            wrapper.Resize += (s, e) =>
             {
-                FlowDirection = FlowDirection.TopDown,
-                WrapContents = false,
-                Left = 0,
-                Top = y,
-                Height = 112,
-                BackColor = Color.White,
-                Padding = new Padding(12, 8, 12, 8),
-                Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top,
-                Width = initW,
-                Visible = false
-            };
-            _pnlMentiuni.Paint += (s, e) =>
-            {
-                using (var pen = new Pen(Color.FromArgb(200, 215, 235)))
-                    e.Graphics.DrawRectangle(pen, 0, 0, _pnlMentiuni.Width - 1, _pnlMentiuni.Height - 1);
+                _pnlMentiuni.Width = wrapper.ClientSize.Width;
+                _chkMentiuni.Top = wrapper.ClientSize.Height - ChkH + 8;
             };
 
-            // Header sectiune
-            var pnlHdrM = new Panel { Height = 28, BackColor = _theme.AccentPal, Width = initW };
-            pnlHdrM.Paint += (s2, e2) =>
-                e2.Graphics.FillRectangle(new SolidBrush(_theme.Accent), 0, 0, 4, pnlHdrM.Height);
-            pnlHdrM.Controls.Add(new Label
+            _chkMentiuni.CheckedChanged += (s, e) =>
             {
-                Text = "MENȚIUNI / OBSERVAȚII",
-                Font = new Font("Segoe UI Semibold", 10f),
-                ForeColor = _theme.AccentDark,
-                AutoSize = true,
-                Location = new Point(14, 5)
-            });
-            _pnlMentiuni.Controls.Add(pnlHdrM);
-
-            _txtMentiuni = MakeMultiline(72);
-            _txtMentiuni.Width = initW - 24;
-            _pnlMentiuni.Controls.Add(_txtMentiuni);
-
-            _pnlBody.Controls.Add(_pnlMentiuni);
-            _pnlBody.Resize += (s, e) =>
-            {
-                int w = _pnlBody.ClientSize.Width - _pnlBody.Padding.Horizontal;
-                _pnlMentiuni.Width = w;
-                pnlHdrM.Width = w - 24;
-                _txtMentiuni.Width = w - 24;
-            };
-
-            chkMentiuni.CheckedChanged += (s, e) =>
-            {
-                _pnlMentiuni.Visible = chkMentiuni.Checked;
-                if (!chkMentiuni.Checked && _txtMentiuni != null)
+                bool on = _chkMentiuni.Checked;
+                _pnlMentiuni.Visible = on;
+                wrapper.Height = on ? ChkH + MentiuniH : ChkH;
+                // Repoziționeaza bifa la baza wrapper-ului
+                _chkMentiuni.Top = wrapper.ClientSize.Height - ChkH + 8;
+                if (!on && _txtMentiuni != null)
                     _txtMentiuni.Text = string.Empty;
             };
 
-            y += 116;
+            return wrapper;
         }
 
         // ══════════════════════════════════════════════════════
@@ -1162,6 +1318,16 @@ namespace ActAditionalPlugin.UI
                         _def.RegistraturaTipDocPk,
                         _def.Title,
                         _common.PrsnId);
+
+                    // Insert in tabela specifica categoriei (Acte Aditionale / Decizii / PV)
+                    // Transmitem titlul documentului prin formValues pentru tipDcz/pvType
+                    formValues["_DocTitle"] = _def.Title;
+                    RegistraturaService.Instance.InregistreazaTabelaSpecifica(
+                        _def.Category,
+                        codReg,
+                        dataReg,
+                        _common.PrsnId,
+                        formValues);
                 }
 
                 string pdfPath = DynamicTemplateEngine.GeneratePdf(_def, formValues, _common);
@@ -1184,33 +1350,43 @@ namespace ActAditionalPlugin.UI
         // ══════════════════════════════════════════════════════
         private void RunHooks(string onEvent, Dictionary<string, object> formValues)
         {
-            // Colecteaza valorile curente din controale pentru on_change
-            if (onEvent == "on_change" && formValues == null)
+            if (_hooksRunning) return;
+            _hooksRunning = true;
+            try
             {
-                foreach (var def2 in _def.Sections.SelectMany(s => s.Fields))
+                // Colecteaza valorile curente din controale pentru on_change
+                if (onEvent == "on_change" && formValues == null)
                 {
-                    if (_controls.ContainsKey(def2.Key))
-                        _formValues[def2.Key] = GetControlValue(_controls[def2.Key], def2.Type);
+                    foreach (var def2 in _def.Sections.SelectMany(s => s.Fields))
+                    {
+                        if (_controls.ContainsKey(def2.Key))
+                            _formValues[def2.Key] = GetControlValue(_controls[def2.Key], def2.Type);
+                    }
+                }
+
+                var ctx = new HookContext
+                {
+                    Definition = _def,
+                    FormValues = formValues ?? _formValues,
+                    Common = _common,
+                    XSupport = BulkContext.XSupport
+                };
+                HookRegistry.RunHooks(onEvent, ctx);
+
+                // Dupa on_open sau on_change, actualizeaza controalele
+                if ((onEvent == "on_open" || onEvent == "on_change") && formValues == null)
+                {
+                    var keys = new List<string>(_formValues.Keys);
+                    foreach (var key in keys)
+                    {
+                        if (_controls.ContainsKey(key))
+                            SetControlValue(_controls[key], _formValues[key]?.ToString() ?? string.Empty);
+                    }
                 }
             }
-
-            var ctx = new HookContext
+            finally
             {
-                Definition = _def,
-                FormValues = formValues ?? _formValues,
-                Common = _common,
-                XSupport = BulkContext.XSupport
-            };
-            HookRegistry.RunHooks(onEvent, ctx);
-
-            // Dupa on_open sau on_change, actualizeaza controalele
-            if ((onEvent == "on_open" || onEvent == "on_change") && formValues == null)
-            {
-                foreach (var kv in _formValues)
-                {
-                    if (_controls.ContainsKey(kv.Key))
-                        SetControlValue(_controls[kv.Key], kv.Value?.ToString() ?? string.Empty);
-                }
+                _hooksRunning = false;
             }
         }
 
@@ -1352,6 +1528,12 @@ namespace ActAditionalPlugin.UI
                 AutoScroll = true,
                 Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top
             };
+            pnlItems.Paint += (s, e) =>
+            {
+                using (var pen = new Pen(_theme.AccentBorder, 2f))
+                    e.Graphics.DrawRectangle(pen, 1, 1, pnlItems.Width - 3, pnlItems.Height - 3);
+                e.Graphics.FillRectangle(new SolidBrush(_theme.Accent), 0, 0, 4, pnlItems.Height);
+            };
             _pnlBody.Controls.Add(pnlItems);
             _pnlBody.Resize += (s, e) =>
             {
@@ -1477,11 +1659,31 @@ namespace ActAditionalPlugin.UI
             return cmb;
         }
 
+        private static readonly Font FInputRegular = new Font("Segoe UI", 10f);
+
         private static void SetPlaceholder(TextBox tb, string ph)
         {
-            tb.Text = ph; tb.ForeColor = Color.Gray;
-            tb.GotFocus += (s, e) => { if (tb.ForeColor == Color.Gray) { tb.Text = string.Empty; tb.ForeColor = TextPrincipal; } };
-            tb.LostFocus += (s, e) => { if (string.IsNullOrWhiteSpace(tb.Text)) { tb.Text = ph; tb.ForeColor = Color.Gray; } };
+            tb.Text = ph;
+            tb.ForeColor = Color.Gray;
+            tb.Font = FInputRegular;
+            tb.GotFocus += (s, e) =>
+            {
+                if (tb.ForeColor == Color.Gray)
+                {
+                    tb.Text = string.Empty;
+                    tb.ForeColor = TextPrincipal;
+                    tb.Font = FInput;
+                }
+            };
+            tb.LostFocus += (s, e) =>
+            {
+                if (string.IsNullOrWhiteSpace(tb.Text))
+                {
+                    tb.Text = ph;
+                    tb.ForeColor = Color.Gray;
+                    tb.Font = FInputRegular;
+                }
+            };
         }
 
         // ── Valori controale ───────────────────────────────────
@@ -1543,6 +1745,42 @@ namespace ActAditionalPlugin.UI
             }
         }
 
+        // ── Recalculeaza AutoScrollMinSize dupa modificari dinamice ─
+        private void UpdateBodyScrollHeight()
+        {
+            if (_pnlBody == null) return;
+            int maxBottom = 0;
+            foreach (Control c in _pnlBody.Controls)
+            {
+                int bottom = c.Top + c.Height;
+                if (bottom > maxBottom) maxBottom = bottom;
+            }
+            _pnlBody.AutoScrollMinSize = new System.Drawing.Size(0, maxBottom + 80);
+        }
+
+        // ── Repoziționează toate controalele din _pnlBody în ordine ──
+        // Apelat când un pnlItems crește (lista dinamică adaugă iteme).
+        // Sortează controalele după Top curent și le reașează secvențial,
+        // astfel că cele de sub lista crescută coboară automat.
+        private void ReflowBodyControls()
+        {
+            if (_pnlBody == null) return;
+
+            // Sortam controalele dupa pozitia Top curenta
+            var sorted = _pnlBody.Controls.Cast<Control>()
+                .OrderBy(c => c.Top)
+                .ToList();
+
+            int y = 0;
+            foreach (var c in sorted)
+            {
+                c.Top = y;
+                y += c.Height + (c.Height > 0 ? 8 : 0);
+            }
+
+            _pnlBody.AutoScrollMinSize = new System.Drawing.Size(0, y + 80);
+        }
+
         // ── Calcul height sectiune ─────────────────────────────
         private static int CalcSectionHeight(SectionDefinition section)
         {
@@ -1558,19 +1796,83 @@ namespace ActAditionalPlugin.UI
         }
 
         // ── Static helpers ─────────────────────────────────────
-        private static void RelayoutPanel(Panel pnl, List<Control> items)
+        private void RelayoutPanel(Panel pnl, List<Control> items)
         {
-            // Pastreaza pozitia scroll inainte de relayout
             var scrollPos = pnl.AutoScrollPosition;
-
             int w = Math.Max(pnl.ClientSize.Width - 4, 380);
             int y = 4;
             foreach (var c in items) { c.Width = w; c.Left = 2; c.Top = y; y += c.Height + 4; }
-
-            // Restaureaza pozitia scroll
             if (pnl.AutoScroll)
-                pnl.AutoScrollPosition = new System.Drawing.Point(
-                    -scrollPos.X, -scrollPos.Y);
+                pnl.AutoScrollPosition = new System.Drawing.Point(-scrollPos.X, -scrollPos.Y);
+        }
+
+        private static Button MakeFooterButton(string text, Image icon, Color bg, Color fg)
+        {
+            var img = ResizeImage(icon, 16, 16);
+            var btn = new Button
+            {
+                Text = string.Empty,
+                Height = 36,
+                Width = 130,
+                FlatStyle = FlatStyle.Flat,
+                BackColor = bg,
+                ForeColor = fg,
+                Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+                Cursor = Cursors.Hand,
+                Top = 10
+            };
+            btn.FlatAppearance.BorderSize = 0; // desenam borderul manual
+
+            bool hovered = false;
+            bool pressed = false;
+
+            btn.MouseEnter += (s, e) => { hovered = true; btn.Invalidate(); };
+            btn.MouseLeave += (s, e) => { hovered = false; pressed = false; btn.Invalidate(); };
+            btn.MouseDown += (s, e) => { pressed = true; btn.Invalidate(); };
+            btn.MouseUp += (s, e) => { pressed = false; btn.Invalidate(); };
+
+            btn.Paint += (s, e) =>
+            {
+                var b = (Button)s;
+                var g = e.Graphics;
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+                // Culoare fundal cu hover/press
+                Color drawBg = pressed
+                    ? ControlPaint.Dark(bg, 0.25f)
+                    : hovered
+                        ? ControlPaint.Dark(bg, 0.10f)
+                        : bg;
+                g.Clear(drawBg);
+
+                // Border 2px - mai inchis la hover/press
+                Color borderColor = b.FlatAppearance.BorderColor == Color.Empty
+                    ? ControlPaint.Dark(bg, 0.2f)
+                    : b.FlatAppearance.BorderColor;
+                if (hovered || pressed)
+                    borderColor = ControlPaint.Dark(borderColor, 0.2f);
+                using (var pen = new Pen(borderColor, 2f))
+                    g.DrawRectangle(pen, 1, 1, b.Width - 3, b.Height - 3);
+
+                // Icoana + text centrate
+                const int iconW = 16, iconH = 16, gap = 6;
+                string label = text.TrimStart();
+                int textW = (int)g.MeasureString(label, b.Font).Width;
+                int totalW = iconW + gap + textW;
+                int startX = (b.Width - totalW) / 2;
+                int iconY = (b.Height - iconH) / 2;
+
+                g.DrawImage(img, startX, iconY, iconW, iconH);
+
+                var sf = new System.Drawing.StringFormat
+                {
+                    Alignment = StringAlignment.Near,
+                    LineAlignment = StringAlignment.Center
+                };
+                g.DrawString(label, b.Font, new SolidBrush(fg),
+                    new RectangleF(startX + iconW + gap, 0, textW + 4, b.Height), sf);
+            };
+            return btn;
         }
 
         private static void PaintBorder(object sender, PaintEventArgs e)
@@ -1785,7 +2087,7 @@ namespace ActAditionalPlugin.UI
                             Minimum = 0,
                             Maximum = 9999,
                             DecimalPlaces = 0,
-                            Font = new Font("Segoe UI", 10f, FontStyle.Bold),
+                            Font = new Font("Segoe UI", 10f),
                             Dock = DockStyle.Top,
                             Height = 26
                         };
@@ -1795,7 +2097,7 @@ namespace ActAditionalPlugin.UI
                     {
                         var tb = new TextBox
                         {
-                            Font = new Font("Segoe UI", 10f),
+                            Font = new Font("Segoe UI", 10f, FontStyle.Bold),
                             Dock = DockStyle.Top,
                             Height = 26,
                             BorderStyle = BorderStyle.FixedSingle
@@ -1804,8 +2106,25 @@ namespace ActAditionalPlugin.UI
                         {
                             tb.Text = itemField.Placeholder;
                             tb.ForeColor = Color.Gray;
-                            tb.GotFocus += (s2, e2) => { if (tb.ForeColor == Color.Gray) { tb.Text = string.Empty; tb.ForeColor = Color.Black; } };
-                            tb.LostFocus += (s2, e2) => { if (string.IsNullOrWhiteSpace(tb.Text)) { tb.Text = itemField.Placeholder; tb.ForeColor = Color.Gray; } };
+                            tb.Font = new Font("Segoe UI", 10f);
+                            tb.GotFocus += (s2, e2) =>
+                            {
+                                if (tb.ForeColor == Color.Gray)
+                                {
+                                    tb.Text = string.Empty;
+                                    tb.ForeColor = Color.Black;
+                                    tb.Font = new Font("Segoe UI", 10f, FontStyle.Bold);
+                                }
+                            };
+                            tb.LostFocus += (s2, e2) =>
+                            {
+                                if (string.IsNullOrWhiteSpace(tb.Text))
+                                {
+                                    tb.Text = itemField.Placeholder;
+                                    tb.ForeColor = Color.Gray;
+                                    tb.Font = new Font("Segoe UI", 10f);
+                                }
+                            };
                         }
                         ctrl = tb;
                     }

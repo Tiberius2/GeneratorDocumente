@@ -122,9 +122,10 @@ namespace ActAditionalPlugin.Services
             DocumentDefinition def,
             Dictionary<string, object> formValues)
         {
+            // Procesam atat dynamic_list cat si clauze_editor (acelasi format de date)
             var listFields = def.Sections
                 .SelectMany(s => s.Fields)
-                .Where(f => f.Type == "dynamic_list")
+                .Where(f => f.Type == "dynamic_list" || f.Type == "clauze_editor")
                 .ToList();
 
             foreach (var field in listFields)
@@ -134,12 +135,32 @@ namespace ActAditionalPlugin.Services
                 var rows = formValues[field.Key] as List<Dictionary<string, string>>;
                 if (rows == null || rows.Count == 0) continue;
 
-                // Fiecare sub-camp al listei poate fi un placeholder expandabil
-                foreach (var itemField in field.ItemFields)
+                if (field.Type == "clauze_editor")
                 {
-                    string marker = "{{" + itemField.Key + "}}";
-                    ExpandParagraphOrRow(body, marker, rows, itemField.Key,
-                        field.ItemFields.Select(f2 => f2.Key).ToList());
+                    // Cheile fixe din CollectFormValues pentru clauze
+                    var clauzeKeys = new List<string> { "ModificareNr", "ModificareReferinta", "ModificareText" };
+                    // Expandam dupa primul placeholder gasit in template
+                    foreach (var key in clauzeKeys)
+                    {
+                        string marker = "{{" + key + "}}";
+                        bool found = body.Descendants<Paragraph>()
+                            .Any(p => string.Concat(p.Descendants<Text>().Select(t => t.Text)).Contains(marker));
+                        if (found)
+                        {
+                            ExpandParagraphOrRow(body, marker, rows, key, clauzeKeys);
+                            break; // un singur marker e suficient — expandeaza tot randul/paragraful
+                        }
+                    }
+                }
+                else
+                {
+                    // Fiecare sub-camp al listei poate fi un placeholder expandabil
+                    foreach (var itemField in field.ItemFields)
+                    {
+                        string marker = "{{" + itemField.Key + "}}";
+                        ExpandParagraphOrRow(body, marker, rows, itemField.Key,
+                            field.ItemFields.Select(f2 => f2.Key).ToList());
+                    }
                 }
             }
         }

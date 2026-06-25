@@ -45,6 +45,9 @@ namespace ActAditionalPlugin.UI
 
         public Action OnDelete { get; set; }
 
+        // Apelat de DynamicForm pentru a relayouta panelul parinte dupa ce inaltime se schimba
+        public Action OnHeightChanged { get; set; }
+
         // ══════════════════════════════════════════════════════
         public PunctModificareControl(int numar, List<ClauzeActAditional> clauze)
         {
@@ -497,7 +500,12 @@ namespace ActAditionalPlugin.UI
             if (_pnlPreview?.Height > 0) h += _pnlPreview.Height + 4;
             if (_pnlEdit?.Height > 0) h += _pnlEdit.Height + 4;
             h += 8;
-            Height = Math.Max(h, 50);
+            int newH = Math.Max(h, 50);
+            if (newH != Height)
+            {
+                Height = newH;
+                if (OnHeightChanged != null) OnHeightChanged();
+            }
         }
 
         // ── Helpers ───────────────────────────────────────────

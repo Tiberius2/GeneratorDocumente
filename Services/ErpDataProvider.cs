@@ -107,6 +107,9 @@ namespace ActAditionalPlugin.Services
                 {
                     xSupport.Warning("ActAditional: nu s-au gasit date companie pentru COMPANY " + companyId);
                 }
+
+                // Fallback la PluginConfig pentru campurile ramase goale
+                ApplyPluginConfigFallback(result);
             }
             catch (Exception ex)
             {
@@ -114,6 +117,21 @@ namespace ActAditionalPlugin.Services
             }
 
             return result;
+        }
+
+        private static void ApplyPluginConfigFallback(ErpCompanyData r)
+        {
+            if (string.IsNullOrWhiteSpace(r.NumeAngajator)) r.NumeAngajator = PluginConfig.NumeAngajator;
+            if (string.IsNullOrWhiteSpace(r.CIFAngajator)) r.CIFAngajator = PluginConfig.CIFAngajator;
+            if (string.IsNullOrWhiteSpace(r.ReprezentantLegal)) r.ReprezentantLegal = PluginConfig.ReprezentantLegal;
+            if (string.IsNullOrWhiteSpace(r.FunctieReprezentant)) r.FunctieReprezentant = PluginConfig.FunctieReprezentant;
+            if (string.IsNullOrWhiteSpace(r.AdresaCompanie)) r.AdresaCompanie = PluginConfig.AdresaCompanie;
+            if (string.IsNullOrWhiteSpace(r.ZipCompanie)) r.ZipCompanie = PluginConfig.ZipCompanie;
+            if (string.IsNullOrWhiteSpace(r.NrRegComertului)) r.NrRegComertului = PluginConfig.NrRegComertului;
+            if (string.IsNullOrWhiteSpace(r.IbanCompanie)) r.IbanCompanie = PluginConfig.IbanCompanie;
+            if (string.IsNullOrWhiteSpace(r.NrTelefonCompanie)) r.NrTelefonCompanie = PluginConfig.NrTelefonCompanie;
+            if (string.IsNullOrWhiteSpace(r.EmailCompanie)) r.EmailCompanie = PluginConfig.EmailCompanie;
+            if (string.IsNullOrWhiteSpace(r.WebsiteCompanie)) r.WebsiteCompanie = PluginConfig.WebsiteCompanie;
         }
 
         /// <summary>

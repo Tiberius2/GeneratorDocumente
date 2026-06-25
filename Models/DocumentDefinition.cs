@@ -160,8 +160,16 @@ namespace ActAditionalPlugin.Models
         public string Label { get; set; }
 
         // Tipuri posibile: text, number, person_picker
+        // Daca lipseste din JSON ramane null — getter returneaza "text" ca fallback
         [JsonProperty("type")]
-        public string Type { get; set; }
+        private string _type;
+
+        [JsonIgnore]
+        public string Type
+        {
+            get { return string.IsNullOrWhiteSpace(_type) ? "text" : _type; }
+            set { _type = value; }
+        }
 
         [JsonProperty("width_percent")]
         public int WidthPercent { get; set; }
@@ -175,7 +183,7 @@ namespace ActAditionalPlugin.Models
 
         public ItemFieldDefinition()
         {
-            Type = "text";
+            _type = "text";
             Maps = new Dictionary<string, string>();
         }
     }
