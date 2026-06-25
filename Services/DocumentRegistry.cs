@@ -89,9 +89,11 @@ namespace ActAditionalPlugin.Services
                         category.Documents.Add(def);
                 }
 
-                // Sorteaza documentele alfabetic in categorie
+                // Sorteaza documentele: cele cu "order" explicit (>0) primele,
+                // in ordine crescatoare; restul, fara order, alfabetic la final
                 category.Documents = category.Documents
-                    .OrderBy(d => d.Title)
+                    .OrderBy(d => d.Order > 0 ? d.Order : int.MaxValue)
+                    .ThenBy(d => d.Title)
                     .ToList();
 
                 if (category.Documents.Count > 0)

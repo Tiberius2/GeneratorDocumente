@@ -19,6 +19,12 @@ namespace ActAditionalPlugin.Models
         [JsonProperty("template_file")]
         public string TemplateFile { get; set; }  // ex. "template_pv_cercetare.docx"
 
+        // Ordinea cardului in cadrul categoriei (in SelectorDialog).
+        // Optional: 0/absent = fara preferinta, cade la final, sortat alfabetic.
+        // Valorile explicite (1, 2, 3...) sunt afisate primele, in ordine crescatoare.
+        [JsonProperty("order")]
+        public int Order { get; set; }
+
         // ── Registratura ──────────────────────────────────────
         [JsonProperty("registratura")]
         public bool Registratura { get; set; }
