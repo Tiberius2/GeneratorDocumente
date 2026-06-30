@@ -2041,7 +2041,7 @@ namespace ActAditionalPlugin.UI
             }
             if (currentRow.Count > 0) rows.Add(currentRow);
 
-            int rowH = 54;
+            int rowH = 50;
             int totalH = rows.Count * rowH;
 
             // Panel container pentru toate randurile
@@ -2131,15 +2131,23 @@ namespace ActAditionalPlugin.UI
 
                     _fields[itemField.Key] = ctrl;
 
-                    var cell = new Panel { Dock = DockStyle.Fill, BackColor = Color.Transparent, Padding = new Padding(0, 0, 6, 0) };
-                    cell.Controls.Add(ctrl);
-                    cell.Controls.Add(new Label
+
+                    var lbl = new Label
                     {
                         Text = itemField.Label,
                         Font = new Font("Segoe UI", 9f),
                         ForeColor = Color.FromArgb(55, 75, 105),
-                        AutoSize = true
-                    });
+                        AutoSize = false,
+                        Height = 16,
+                        Dock = DockStyle.Top
+                    };
+                    ctrl.Dock = DockStyle.Top;
+                    ctrl.Height = 26;
+
+                    // Dock=Top: primul adaugat e cel mai jos, deci ctrl primul, lbl al doilea
+                    var cell = new Panel { Dock = DockStyle.Fill, BackColor = Color.Transparent, Padding = new Padding(0, 4, 6, 4) };
+                    cell.Controls.Add(ctrl);
+                    cell.Controls.Add(lbl);
                     tbl.Controls.Add(cell, rowFields.IndexOf(itemField), 0);
                 }
 

@@ -185,12 +185,21 @@ namespace ActAditionalPlugin.Services
                 }
             }
 
-            // CCCTIPDCZ — tipul deciziei dedus din categorie/titlu
-            // Se ia din formValues["_DocTitle"] setat de DynamicForm inainte de apel
+            // CCCTIPDCZ — prioritate: camp explicit "TipDecizie" din formular,
+            // altfel dedus din titlul documentului
             string tipDcz = string.Empty;
-            object titleObj;
-            if (formValues.TryGetValue("_DocTitle", out titleObj) && titleObj != null)
-                tipDcz = tipDczDinTitlu(titleObj.ToString());
+            object tipObj;
+            if (formValues.TryGetValue("TipDecizie", out tipObj) && tipObj != null
+                && !string.IsNullOrWhiteSpace(tipObj.ToString()))
+            {
+                tipDcz = tipObj.ToString().Trim();
+            }
+            else
+            {
+                object titleObj;
+                if (formValues.TryGetValue("_DocTitle", out titleObj) && titleObj != null)
+                    tipDcz = tipDczDinTitlu(titleObj.ToString());
+            }
 
             int lineNum = NextLineNum("CCCDCZCONTRACT", "PRSN", prsnId);
             string idContractSql = cccIdContract > 0 ? cccIdContract.ToString() : "NULL";
@@ -274,21 +283,22 @@ namespace ActAditionalPlugin.Services
 
         private static string tipDczDinTitlu(string title)
         {
-            string t = title.ToLower();
-            if (t.Contains("crestere copil handicap")) return "Crestere copil handicap";
-            if (t.Contains("crestere copil")) return "Crestere copil";
-            if (t.Contains("absente nemotivate")) return "Absente nemotivate";
-            if (t.Contains("acordul")) return "Acordul partilor";
-            if (t.Contains("incetare suspendare") ||
-                t.Contains("incetare a suspendarii")) return "Incetare suspendare";
-            if (t.Contains("suspendare") &&
-                t.Contains("incetare")) return "Suspendare + Incetare";
-            if (t.Contains("suspendare")) return "Acordul partilor";
-            if (t.Contains("demisie")) return "Incetare demisie";
-            if (t.Contains("expirare")) return "Expirare termen";
-            if (t.Contains("proba")) return "Perioada proba";
-            if (t.Contains("disciplinar")) return "Incetare disciplinar";
-            return title;
+            // Folosim direct titlul documentului din JSON, fara diacritice
+            return RemoveDiacritics(title);
+        }
+
+        private static string RemoveDiacritics(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return text;
+            string normalized = text.Normalize(System.Text.NormalizationForm.FormD);
+            var sb = new System.Text.StringBuilder();
+            foreach (char c in normalized)
+            {
+                var cat = System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c);
+                if (cat != System.Globalization.UnicodeCategory.NonSpacingMark)
+                    sb.Append(c);
+            }
+            return sb.ToString().Normalize(System.Text.NormalizationForm.FormC);
         }
 
     }
