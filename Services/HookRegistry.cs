@@ -92,6 +92,25 @@ namespace ActAditionalPlugin.Services
             }
         }
 
+        /// <summary>
+        /// Ruleaza un singur handler dupa nume, cu contextul dat (inclusiv DocumentBody).
+        /// Folosit din DynamicTemplateEngine pentru hookuri care necesita acces la body-ul Word.
+        /// </summary>
+        public static void RunSingleHook(string handlerName, HookContext ctx)
+        {
+            Action<HookContext> handler;
+            if (_handlers.TryGetValue(handlerName, out handler))
+            {
+                try { handler(ctx); }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        string.Format("[HookRegistry] Eroare handler '{0}': {1}",
+                            handlerName, ex.Message));
+                }
+            }
+        }
+
         // ══════════════════════════════════════════════════════
         //  HANDLER: InjectArticoleFinal
         //  Calculeaza numarul urmator dupa ultimul Art.N din doc
@@ -209,23 +228,29 @@ namespace ActAditionalPlugin.Services
         // ══════════════════════════════════════════════════════
         private static void ConcatList(HookContext ctx)
         {
-            string sourceField, itemKey, targetField, separator;
+            string sourceField, itemKey, targetField, separator, distinctStr;
             if (!ctx.Params.TryGetValue("source_field", out sourceField)) return;
             if (!ctx.Params.TryGetValue("item_key", out itemKey)) return;
             if (!ctx.Params.TryGetValue("target_field", out targetField)) return;
             ctx.Params.TryGetValue("separator", out separator);
             if (separator == null) separator = ", ";
+            ctx.Params.TryGetValue("distinct", out distinctStr);
+            bool distinct = distinctStr != null &&
+                (distinctStr.Equals("true", StringComparison.OrdinalIgnoreCase) || distinctStr == "1");
 
             if (!ctx.FormValues.ContainsKey(sourceField)) return;
 
             var rows = ctx.FormValues[sourceField] as List<Dictionary<string, string>>;
             if (rows == null) return;
 
-            string result = string.Join(separator,
-                rows.Where(r => r.ContainsKey(itemKey) && !string.IsNullOrWhiteSpace(r[itemKey]))
-                    .Select(r => r[itemKey]));
+            var values = rows
+                .Where(r => r.ContainsKey(itemKey) && !string.IsNullOrWhiteSpace(r[itemKey]))
+                .Select(r => r[itemKey].Trim());
 
-            ctx.FormValues[targetField] = result;
+            if (distinct)
+                values = values.Distinct();
+
+            ctx.FormValues[targetField] = string.Join(separator, values);
         }
 
         // ══════════════════════════════════════════════════════

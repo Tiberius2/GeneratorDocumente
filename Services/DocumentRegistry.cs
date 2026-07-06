@@ -111,7 +111,7 @@ namespace ActAditionalPlugin.Services
         }
 
         // ══════════════════════════════════════════════════════
-        //  Accessori
+        //  Accessorii
         // ══════════════════════════════════════════════════════
         public static List<DocumentCategory> GetCategories()
         {

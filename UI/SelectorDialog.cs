@@ -24,6 +24,8 @@ namespace ActAditionalPlugin.UI
         private readonly List<PersonInfo> _persoane;
         private readonly int _currentPrsnId;
         private Button _btnAngajat;
+        private double _pulsePhase = 0;   // faza animatie badge pulsant
+        private bool _btnAngajatHovered = false;
         private Button _btnContinua;
         private Button _selectedCard;
         private readonly List<Button> _allCards = new List<Button>();
@@ -33,6 +35,120 @@ namespace ActAditionalPlugin.UI
         private static readonly Color BgForm = Color.FromArgb(242, 245, 250);
 
         // ══════════════════════════════════════════════════════
+        //  Constructor fara parametri — pentru apelul direct din
+        //  Softone ca "Dll Form".
+        // ══════════════════════════════════════════════════════
+        public SelectorDialog() : this(InitStandaloneAndLoadPersoane(), 0)
+        {
+            _standaloneMode = true;
+            _companyDataStandalone = _companyDataStandaloneStatic;
+        }
+
+        private static List<PersonInfo> InitStandaloneAndLoadPersoane()
+        {
+            try
+            {
+                //PdfSharp.Fonts.GlobalFontSettings.UseWindowsFontsUnderWindows = true;
+                RegistraturaService.Initialize(S1.xSupp);
+                HookRegistry.RegisterAll();
+                DocumentRegistry.Initialize(TemplatesRootStandalone());
+
+                var companyData = ErpDataProvider.GetCompanyData(S1.xSupp);
+                BulkContext.XSupport = S1.xSupp;
+                BulkContext.CompanyData = companyData;
+                _companyDataStandaloneStatic = companyData;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Eroare la inițializare:\n" + ex.Message,
+                    "Generator Documente HR", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+
+            return LoadPersoaneStandalone();
+        }
+
+        private static ErpCompanyData _companyDataStandaloneStatic;
+
+        private bool _standaloneMode;
+        private ErpCompanyData _companyDataStandalone;
+        private ErpCimData _cimDataStandalone;
+        private int _cimDataPrsnId;
+
+        private static List<PersonInfo> LoadPersoaneStandalone()
+        {
+            try
+            {
+                return S1.xSupp != null
+                    ? PersonPickerDialog.LoadFromErp(S1.xSupp)
+                    : new List<PersonInfo>();
+            }
+            catch { return new List<PersonInfo>(); }
+        }
+
+        private static string TemplatesRootStandalone()
+        {
+            string configured = PluginConfig.TemplatesRoot;
+            if (!string.IsNullOrWhiteSpace(configured) && System.IO.Directory.Exists(configured))
+                return configured;
+
+            string dllDir = System.IO.Path.GetDirectoryName(
+                System.Reflection.Assembly.GetExecutingAssembly().Location);
+            return System.IO.Path.Combine(dllDir, "Templates");
+        }
+
+        private void StandaloneLoop()
+        {
+            if (SelectedDocument == null || SelectedPerson == null) return;
+
+            try
+            {
+                if (_cimDataStandalone == null || SelectedPerson.PrsnId != _cimDataPrsnId)
+                {
+                    _cimDataStandalone = ErpDataProvider.GetCimData(SelectedPerson.PrsnId, S1.xSupp);
+                    _cimDataPrsnId = SelectedPerson.PrsnId;
+                }
+
+                var common = CommonDocumentValues.FromErp(
+                    SelectedPerson.PrsnId,
+                    SelectedPerson.NumeComplet,
+                    SelectedPerson.CNP,
+                    SelectedPerson.Functie,
+                    _cimDataStandalone,
+                    _companyDataStandalone);
+
+                common.CodInregistrare = RegistraturaService.Instance.CalculateCod(
+                    RegistraturaService.Instance.GetLoginDate());
+
+                using (var form = new DynamicForm(SelectedDocument, common, _persoane))
+                {
+                    form.ShowDialog(this);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Eroare:\n" + ex.Message,
+                    "Generator Documente HR", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+
+            ResetSelectionForNextDocument();
+        }
+
+        private void ResetSelectionForNextDocument()
+        {
+            SelectedDocument = null;
+            if (_selectedCard != null)
+            {
+                _selectedCard.BackColor = Color.White;
+                _selectedCard.Invalidate();
+                _selectedCard = null;
+            }
+            _btnContinua.Enabled = false;
+            _btnContinua.BackColor = Color.FromArgb(180, 190, 210);
+            _btnContinua.ForeColor = Color.FromArgb(100, 110, 130);
+            _btnContinua.Font = new Font("Segoe UI", 10f);
+        }
+
+        // ══════════════════════════════════════════════════════
         //  Constructor
         // ══════════════════════════════════════════════════════
         public SelectorDialog(List<PersonInfo> persoane, int currentPrsnId = 0)
@@ -40,7 +156,6 @@ namespace ActAditionalPlugin.UI
             _persoane = persoane ?? new List<PersonInfo>();
             _currentPrsnId = currentPrsnId;
 
-            // Pre-selecteaza angajatul curent
             SelectedPerson = _persoane.FirstOrDefault(p => p.PrsnId == currentPrsnId);
 
             Text = "Generator Documente HR";
@@ -68,46 +183,45 @@ namespace ActAditionalPlugin.UI
                 BackColor = BgDark
             };
 
-            var lblAlege = new Label
-            {
-                Text = "Selectează Angajatul:",
-                Font = new Font("Segoe UI", 15f, FontStyle.Bold),
-                ForeColor = Color.White,
-                AutoSize = true,
-                Left = 20,
-                Top = 18,
-                Anchor = AnchorStyles.Left | AnchorStyles.Top
-            };
-            pnlHeader.Controls.Add(lblAlege);
-
+            // ── Buton selectare angajat ───────────────────────
+            // Desenat complet in Paint — doua stari:
+            //   fara angajat → rosu, badge pulsant, label OBLIGATORIU, chevron
+            //   cu angajat   → albastru, avatar initiale, nume+functie, creion
             _btnAngajat = new Button
             {
-                Text = SelectedPerson != null
-                    ? string.Format("  {0}  ▾", SelectedPerson.NumeComplet)
-                    : "Alege...  ▾",
-                Height = 32,
-                Width = 320,
+                Height = 56,
+                Width = 420,
                 FlatStyle = FlatStyle.Flat,
-                BackColor = Color.FromArgb(50, 62, 88),
-                ForeColor = Color.FromArgb(200, 220, 255),
-                Font = new Font("Segoe UI", 11f),
-                TextAlign = ContentAlignment.MiddleRight,
                 Cursor = Cursors.Hand,
-                Anchor = AnchorStyles.Left | AnchorStyles.Top
+                Anchor = AnchorStyles.Left | AnchorStyles.Top,
+                UseVisualStyleBackColor = false,
+                Text = ""   // tot continutul e desenat in Paint
             };
-            _btnAngajat.FlatAppearance.BorderSize = 2;
-            _btnAngajat.FlatAppearance.BorderColor = Color.FromArgb(233, 239, 247);
+            _btnAngajat.FlatAppearance.BorderSize = 0;
+            _btnAngajat.Paint += (s, e) => DrawAngajatButton(e.Graphics, _btnAngajat);
             _btnAngajat.Click += OnSelectAngajat;
+            _btnAngajat.MouseEnter += (s, e) => { _btnAngajatHovered = true; _btnAngajat.Invalidate(); };
+            _btnAngajat.MouseLeave += (s, e) => { _btnAngajatHovered = false; _btnAngajat.Invalidate(); };
+
+            // Timer pentru animatia de puls — invalideaza butonul cat timp
+            // nu e selectat niciun angajat
+            var pulseTimer = new System.Windows.Forms.Timer { Interval = 30 };
+            pulseTimer.Tick += (s, e) =>
+            {
+                _pulsePhase += 0.08;
+                if (SelectedPerson == null && _btnAngajat.IsHandleCreated && !_btnAngajat.IsDisposed)
+                    _btnAngajat.Invalidate();
+            };
+            pulseTimer.Start();
+
             pnlHeader.Controls.Add(_btnAngajat);
 
-            // Pozitioneaza butonul langa label
-            Action pozBtn = () =>
-            {
-                _btnAngajat.Left = lblAlege.Right + 12;
-                _btnAngajat.Top = lblAlege.Top + (lblAlege.Height - _btnAngajat.Height) / 2;
-            };
-            pnlHeader.HandleCreated += (s, e) => pozBtn();
-            lblAlege.SizeChanged += (s, e) => pozBtn();
+            // Centreaza vertical butonul in header
+            pnlHeader.HandleCreated += (s, e) =>
+                _btnAngajat.Top = (pnlHeader.Height - _btnAngajat.Height) / 2;
+            pnlHeader.Resize += (s, e) =>
+                _btnAngajat.Top = (pnlHeader.Height - _btnAngajat.Height) / 2;
+            _btnAngajat.Left = 16;
 
             // Titlu dreapta
             var lblTitlu = new Label
@@ -205,6 +319,123 @@ namespace ActAditionalPlugin.UI
 
             AcceptButton = _btnContinua;
             CancelButton = btnAnuleaza;
+        }
+
+        // ══════════════════════════════════════════════════════
+        //  DRAW ANGAJAT BUTTON
+        //  Custom paint pentru butonul de selectie angajat.
+        //  Stare 1 — fara angajat: fundal rosu, cerc pulsant stanga,
+        //    label "OBLIGATORIU" mic, text "Selecteaza angajatul", chevron dreapta.
+        //  Stare 2 — angajat selectat: fundal albastru, avatar circular cu
+        //    initiale, label "ANGAJAT SELECTAT" mic, nume — functie, creion dreapta.
+        // ══════════════════════════════════════════════════════
+        private void DrawAngajatButton(Graphics g, Button btn)
+        {
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+
+            int w = btn.Width, h = btn.Height;
+            int cy = h / 2;
+            const int Radius = 8;
+            const float TextX = 62f;
+
+            Color bgColor = SelectedPerson == null
+                ? (_btnAngajatHovered ? Color.FromArgb(172, 58, 58) : Color.FromArgb(148, 48, 48))
+                : (_btnAngajatHovered ? Color.FromArgb(48, 74, 122) : Color.FromArgb(35, 57, 98));
+            Color borderColor = SelectedPerson == null
+                ? Color.FromArgb(195, 78, 78)
+                : Color.FromArgb(62, 100, 162);
+
+            // Fundalul header-ului — colturile rotunjite par transparente
+            g.Clear(BgDark);
+
+            // Rounded fill + border vizibil
+            using (var path = RoundedRect(new Rectangle(1, 1, w - 2, h - 2), Radius))
+            {
+                g.FillPath(new SolidBrush(bgColor), path);
+                using (var pen = new Pen(borderColor, 1.5f))
+                    g.DrawPath(pen, path);
+            }
+
+            // StringFormat cu trunchiere "..." pentru text lung
+            using (var sf = new StringFormat
+            {
+                Trimming = StringTrimming.EllipsisCharacter,
+                FormatFlags = StringFormatFlags.NoWrap
+            })
+            {
+                if (SelectedPerson == null)
+                {
+                    // ── Cerc pulsant ──────────────────────────────────────
+                    int cx = 30, baseR = 7;
+                    double scale = 1.0 + 0.55 * Math.Sin(_pulsePhase);
+                    int ringR = (int)(baseR * 2.2 * scale);
+                    byte alpha = (byte)(55 + 55 * Math.Abs(Math.Sin(_pulsePhase)));
+                    using (var br = new SolidBrush(Color.FromArgb(alpha, 240, 100, 100)))
+                        g.FillEllipse(br, cx - ringR, cy - ringR, ringR * 2, ringR * 2);
+                    g.FillEllipse(new SolidBrush(Color.FromArgb(245, 120, 120)),
+                        cx - baseR, cy - baseR, baseR * 2, baseR * 2);
+
+                    // ── "OBLIGATORIU" ──────────────────────────────────────
+                    using (var f = new Font("Segoe UI", 7.5f, FontStyle.Bold))
+                    using (var br = new SolidBrush(Color.FromArgb(255, 200, 200)))
+                        g.DrawString("OBLIGATORIU", f, br, TextX, cy - 17f);
+
+                    // ── Text principal ─────────────────────────────────────
+                    using (var f = new Font("Segoe UI", 10f, FontStyle.Bold))
+                    using (var br = new SolidBrush(Color.FromArgb(255, 232, 232)))
+                        g.DrawString("Selectează angajatul", f, br,
+                            new RectangleF(TextX, cy - 1f, w - TextX - 34f, 20f), sf);
+
+                    // ── Chevron ────────────────────────────────────────────
+                    using (var f = new Font("Segoe UI", 13f))
+                    using (var br = new SolidBrush(Color.FromArgb(230, 195, 195)))
+                        g.DrawString("▾", f, br, w - 26f, cy - 11f);
+                }
+                else
+                {
+                    // ── Avatar circular cu initiale ────────────────────────
+                    int avR = 19, cx = 36;
+                    g.FillEllipse(new SolidBrush(Color.FromArgb(52, 90, 150)),
+                        cx - avR, cy - avR, avR * 2, avR * 2);
+                    string initiale = GetInitiale(SelectedPerson.NumeComplet);
+                    using (var f = new Font("Segoe UI", 9f, FontStyle.Bold))
+                    {
+                        var sz = g.MeasureString(initiale, f);
+                        g.DrawString(initiale, f, Brushes.White, cx - sz.Width / 2, cy - sz.Height / 2);
+                    }
+
+                    // ── "ANGAJAT SELECTAT" ─────────────────────────────────
+                    using (var f = new Font("Segoe UI", 7.5f, FontStyle.Bold))
+                    using (var br = new SolidBrush(Color.FromArgb(105, 150, 215)))
+                        g.DrawString("ANGAJAT SELECTAT", f, br, TextX, cy - 17f);
+
+                    // ── Nume — Functie (cu trunchiere elipsis) ─────────────
+                    string linie = SelectedPerson.NumeComplet;
+                    if (!string.IsNullOrWhiteSpace(SelectedPerson.Functie))
+                        linie += "  —  " + SelectedPerson.Functie;
+                    using (var f = new Font("Segoe UI", 10f, FontStyle.Bold))
+                    using (var br = new SolidBrush(Color.White))
+                        g.DrawString(linie, f, br,
+                            new RectangleF(TextX, cy - 1f, w - TextX - 34f, 20f), sf);
+
+                    // ── Creion ─────────────────────────────────────────────
+                    using (var f = new Font("Segoe UI", 11f))
+                    using (var br = new SolidBrush(Color.FromArgb(115, 155, 215)))
+                        g.DrawString("✎", f, br, w - 28f, cy - 9f);
+                }
+            }
+        }
+
+        private static GraphicsPath RoundedRect(Rectangle r, int radius)
+        {
+            var path = new GraphicsPath();
+            path.AddArc(r.X, r.Y, radius * 2, radius * 2, 180, 90);
+            path.AddArc(r.Right - radius * 2, r.Y, radius * 2, radius * 2, 270, 90);
+            path.AddArc(r.Right - radius * 2, r.Bottom - radius * 2, radius * 2, radius * 2, 0, 90);
+            path.AddArc(r.X, r.Bottom - radius * 2, radius * 2, radius * 2, 90, 90);
+            path.CloseFigure();
+            return path;
         }
 
         // ══════════════════════════════════════════════════════
@@ -401,7 +632,6 @@ namespace ActAditionalPlugin.UI
             var doc = btn.Tag as DocumentDefinition;
             if (doc == null) return;
 
-            // Deselect old
             if (_selectedCard != null)
             {
                 _selectedCard.BackColor = Color.White;
@@ -413,12 +643,25 @@ namespace ActAditionalPlugin.UI
             btn.BackColor = DocumentTheme.ForCategory(doc.Category).AccentPal;
             btn.Invalidate();
 
-            // Activa butonul Continua
             _btnContinua.Enabled = true;
             _btnContinua.BackColor = Color.FromArgb(63, 129, 198);
             _btnContinua.ForeColor = Color.White;
             _btnContinua.Font = new Font("Segoe UI", 10f, FontStyle.Bold);
             _btnContinua.Cursor = Cursors.Hand;
+        }
+
+        // Dupa selectia unui angajat, invalideaza butonul sa se redeseneze
+        private void UpdateAngajatButton()
+        {
+            _btnAngajat?.Invalidate();
+        }
+
+        private static string GetInitiale(string numeComplet)
+        {
+            if (string.IsNullOrWhiteSpace(numeComplet)) return "?";
+            var parts = numeComplet.Trim().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 1) return parts[0].Substring(0, Math.Min(2, parts[0].Length)).ToUpper();
+            return (parts[0].Substring(0, 1) + parts[1].Substring(0, 1)).ToUpper();
         }
 
         private void OnSelectAngajat(object sender, EventArgs e)
@@ -429,7 +672,7 @@ namespace ActAditionalPlugin.UI
             {
                 if (dlg.ShowDialog(this) != DialogResult.OK) return;
                 SelectedPerson = dlg.SelectedPerson;
-                _btnAngajat.Text = string.Format("  {0}  ▾", SelectedPerson.NumeComplet);
+                UpdateAngajatButton();
             }
         }
 
@@ -442,6 +685,13 @@ namespace ActAditionalPlugin.UI
                     "Validare", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
+
+            if (_standaloneMode)
+            {
+                StandaloneLoop();
+                return;
+            }
+
             DialogResult = DialogResult.OK;
             Close();
         }

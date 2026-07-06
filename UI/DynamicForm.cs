@@ -108,6 +108,10 @@ namespace ActAditionalPlugin.UI
                 // Calculeaza codul de inregistrare initial
                 RecalcCodInregistrare();
 
+                // Precompletare campuri CI/Domiciliu din datele angajatului principal
+                // (daca JSON-ul are campuri cu aceste key-uri si sunt inca goale)
+                PrePopulateAngajatCIFields();
+
                 // Ruleaza hooks on_open
                 RunHooks("on_open", null);
             };
@@ -1393,6 +1397,39 @@ namespace ActAditionalPlugin.UI
         // ══════════════════════════════════════════════════════
         //  COD INREGISTRARE
         // ══════════════════════════════════════════════════════
+        /// <summary>
+        /// Precompletare automata a campurilor de CI si Domiciliu ale angajatului principal
+        /// (PRIMITOR), daca JSON-ul are campuri cu key-urile cunoscute si acestea sunt goale.
+        /// Mapare: "CISeria" / "SerieCI" -> _common.SerieCI
+        ///         "CINr"    / "NrCI"    -> _common.NrCI
+        ///         "Domiciliu"           -> _common.Domiciliu
+        /// </summary>
+        private void PrePopulateAngajatCIFields()
+        {
+            var mappings = new System.Collections.Generic.Dictionary<string, string>
+            {
+                { "CISeria",   _common.SerieCI   },
+                { "SerieCI",   _common.SerieCI   },
+                { "CINr",      _common.NrCI      },
+                { "NrCI",      _common.NrCI      },
+                { "Domiciliu", _common.Domiciliu },
+            };
+
+            foreach (var kv in mappings)
+            {
+                if (string.IsNullOrWhiteSpace(kv.Value)) continue;
+                if (!_controls.ContainsKey(kv.Key)) continue;
+
+                // Precompletam doar daca campul e inca gol
+                object existing;
+                if (_formValues.TryGetValue(kv.Key, out existing)
+                    && !string.IsNullOrWhiteSpace(existing?.ToString())) continue;
+
+                _formValues[kv.Key] = kv.Value;
+                SetControlValue(_controls[kv.Key], kv.Value);
+            }
+        }
+
         private void RecalcCodInregistrare(DateTime? data = null)
         {
             if (RegistraturaService.Instance == null) return;
@@ -1737,6 +1774,9 @@ namespace ActAditionalPlugin.UI
                 case "NrCim": return p.NrCim;
                 case "NumeDepartament": return p.NumeDepartament;
                 case "DataCim": return p.DataCimFormatata;
+                case "SerieCI": return p.SerieCI;
+                case "NrCI": return p.NrCI;
+                case "Domiciliu": return p.Domiciliu;
                 case "NumeComplet_Functie":
                     return string.IsNullOrEmpty(p.Functie)
                         ? p.NumeComplet
@@ -2252,7 +2292,12 @@ namespace ActAditionalPlugin.UI
                 else if (kv.Value is NumericUpDown nud)
                     result[kv.Key] = nud.Value.ToString();
                 else if (kv.Value is Button btn)
-                    result[kv.Key] = btn.Text == "Selectează..." ? string.Empty : btn.Text;
+                {
+                    string txt = btn.Text == "Selectează..." ? string.Empty : btn.Text;
+                    // Elimina prefixul "✓ " adaugat la selectia persoanei
+                    if (txt.StartsWith("✓ ")) txt = txt.Substring(2);
+                    result[kv.Key] = txt;
+                }
                 else
                     result[kv.Key] = string.Empty;
             }
@@ -2272,6 +2317,9 @@ namespace ActAditionalPlugin.UI
                 case "NrCim": return p.NrCim;
                 case "NumeDepartament": return p.NumeDepartament;
                 case "DataCim": return p.DataCimFormatata;
+                case "SerieCI": return p.SerieCI;
+                case "NrCI": return p.NrCI;
+                case "Domiciliu": return p.Domiciliu;
                 case "NumeComplet_Functie":
                     return string.IsNullOrEmpty(p.Functie)
                         ? p.NumeComplet

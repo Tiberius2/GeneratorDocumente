@@ -101,6 +101,25 @@ namespace ActAditionalPlugin.Services
                 // 2. Expandare tabele (ex. ActAditional — ModificareNr)
                 ExpandTableRows(body, def, formValues);
 
+                // 2b. Hookuri on_generate cu acces la DocumentBody
+                //     (ex: InjectArticoleFinal — numara Art.N si calculeaza articolele finale)
+                if (def.Hooks != null)
+                {
+                    foreach (var hook in def.Hooks.Where(h => h.On == "on_generate"))
+                    {
+                        var ctx = new HookContext
+                        {
+                            Definition = def,
+                            FormValues = formValues,
+                            Common = common,
+                            Params = hook.Params,
+                            DocumentBody = body,
+                            XSupport = BulkContext.XSupport
+                        };
+                        HookRegistry.RunSingleHook(hook.Handler, ctx);
+                    }
+                }
+
                 // 3. Build map placeholdere → valori
                 var map = BuildPlaceholderMap(def, formValues, common);
 
@@ -309,6 +328,9 @@ namespace ActAditionalPlugin.Services
             map["{{NrCim}}"] = common.NrCim ?? string.Empty;
             map["{{DataCim}}"] = common.DataCim != DateTime.MinValue
                 ? common.DataCim.ToString("dd.MM.yyyy") : string.Empty;
+            map["{{SerieCI}}"] = common.SerieCI ?? string.Empty;
+            map["{{NrCI}}"] = common.NrCI ?? string.Empty;
+            map["{{Domiciliu}}"] = common.Domiciliu ?? string.Empty;
             map["{{CodInregistrare}}"] = common.CodInregistrare ?? string.Empty;
 
             // ── Valori comune companie ─────────────────────────
@@ -396,6 +418,9 @@ namespace ActAditionalPlugin.Services
         public string NumeDepartament { get; set; }
         public string NrCim { get; set; }
         public DateTime DataCim { get; set; }
+        public string SerieCI { get; set; }
+        public string NrCI { get; set; }
+        public string Domiciliu { get; set; }
         public string CodInregistrare { get; set; }
 
         // ── Companie ──────────────────────────────────────────
@@ -424,6 +449,9 @@ namespace ActAditionalPlugin.Services
             NumeDepartament = string.Empty;
             NrCim = string.Empty;
             DataCim = DateTime.MinValue;
+            SerieCI = string.Empty;
+            NrCI = string.Empty;
+            Domiciliu = string.Empty;
             CodInregistrare = string.Empty;
             NumeAngajator = string.Empty;
             CIFAngajator = string.Empty;
@@ -461,6 +489,9 @@ namespace ActAditionalPlugin.Services
                 NumeDepartament = cimData.NumeDepartament,
                 NrCim = cimData.NrCim,
                 DataCim = cimData.DataCim,
+                SerieCI = cimData.SerieCI,
+                NrCI = cimData.NrCI,
+                Domiciliu = cimData.Domiciliu,
                 NumeAngajator = companyData.NumeAngajator,
                 CIFAngajator = companyData.CIFAngajator,
                 ReprezentantLegal = companyData.ReprezentantLegal,

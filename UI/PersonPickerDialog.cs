@@ -30,7 +30,9 @@ namespace ActAditionalPlugin.UI
             "    ISNULL(S.CODE, '') AS CodCor, " +
             "    ISNULL(PEX.CCCVARCHAR05, '') AS NrCim, " +
             "    PEX.DATE03 AS DataCim, " +
-            "    ISNULL(D.NAME, '') AS NumeDepartament " +
+            "    ISNULL(D.NAME, '') AS NumeDepartament, " +
+            "    ISNULL(P.IDENTITYNUM, '') AS IdentityNum, " +
+            "    ISNULL(P.ADDRESS, '') AS Domiciliu " +
             "FROM PRSN P " +
             "JOIN PRSEXTRA PEX ON PEX.PRSN = P.PRSN AND PEX.COMPANY = P.COMPANY " +
             "LEFT JOIN PRSJOBPOS PJ ON PJ.PRSN = P.PRSN AND PJ.COMPANY = P.COMPANY " +
@@ -91,6 +93,15 @@ namespace ActAditionalPlugin.UI
                     string rawDate = ds[i, "DataCim"]?.ToString() ?? string.Empty;
                     if (DateTime.TryParse(rawDate, out dataCim))
                         p.DataCim = dataCim;
+
+                    // SerieCI + NrCI din IDENTITYNUM
+                    string identityNum = ds[i, "IdentityNum"]?.ToString()?.Trim() ?? string.Empty;
+                    string serie, nrci;
+                    PersonInfo.ParseIdentityNum(identityNum, out serie, out nrci);
+                    p.SerieCI = serie;
+                    p.NrCI = nrci;
+
+                    p.Domiciliu = ds[i, "Domiciliu"]?.ToString()?.Trim() ?? string.Empty;
 
                     result.Add(p);
                 }
