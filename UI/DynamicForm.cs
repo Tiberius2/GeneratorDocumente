@@ -2001,6 +2001,9 @@ namespace ActAditionalPlugin.UI
         private Label _lblNumar;
         private int _numar;
         private readonly Dictionary<string, Control> _fields = new Dictionary<string, Control>();
+        // Valori mapate din person_picker care nu au un item_field/control propriu
+        // (ex. "NumeMembruSemnatura" folosit doar de un hook ConcatList, fara camp vizibil in UI)
+        private readonly Dictionary<string, string> _extraValues = new Dictionary<string, string>();
         private readonly FieldDefinition _fieldDef;
         private readonly DocumentTheme _theme;
         private readonly List<PersonInfo> _persoane;
@@ -2243,9 +2246,9 @@ namespace ActAditionalPlugin.UI
                     {
                         foreach (var map in itemField.Maps)
                         {
+                            string val = GetPersonProperty(person, map.Value);
                             if (_fields.ContainsKey(map.Key))
                             {
-                                string val = GetPersonProperty(person, map.Value);
                                 var targetCtrl = _fields[map.Key];
                                 if (targetCtrl is TextBox tb2)
                                 {
@@ -2255,6 +2258,13 @@ namespace ActAditionalPlugin.UI
                                 }
                                 else if (targetCtrl is Button btnTarget)
                                     btnTarget.Text = val;
+                            }
+                            else
+                            {
+                                // Nu exista control/item_field pentru aceasta cheie
+                                // (ex. NumeMembruSemnatura folosit doar de un hook ConcatList) —
+                                // salvam valoarea oricum, ca sa fie disponibila in GetValues().
+                                _extraValues[map.Key] = val;
                             }
                         }
                     }
@@ -2301,6 +2311,14 @@ namespace ActAditionalPlugin.UI
                 else
                     result[kv.Key] = string.Empty;
             }
+
+            // Adauga valorile mapate care nu au un control propriu (ex. NumeMembruSemnatura)
+            foreach (var kv in _extraValues)
+            {
+                if (!result.ContainsKey(kv.Key))
+                    result[kv.Key] = kv.Value;
+            }
+
             return result;
         }
 

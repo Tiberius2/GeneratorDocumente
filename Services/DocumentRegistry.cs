@@ -45,7 +45,8 @@ namespace ActAditionalPlugin.Services
             "Sabloane Decizii Suspendare",
             "Sabloane Decizii Incetare",
             "Sabloane Cercetare Disciplinara",
-            "Sabloane Procese Verbale"
+            "Sabloane Procese Verbale",
+            "Documente Interne"
         };
 
         // ══════════════════════════════════════════════════════

@@ -108,7 +108,7 @@ namespace ActAditionalPlugin.Services
             {
                 if (lower.Contains("acte") || lower.Contains("aditional"))
                     InsertActAditional(codInreg, dataInreg, prsnId, formValues, cccIdContract);
-                else if (lower.Contains("suspendare") || lower.Contains("incetare"))
+                else if (lower.Contains("suspendare") || lower.Contains("incetare") || lower.Contains("interne"))
                     InsertDecizie(codInreg, dataInreg, prsnId, formValues, cccIdContract);
                 else if (lower.Contains("verbale") || lower.Contains("procese"))
                     InsertProcesVerbal(codInreg, dataInreg, prsnId, formValues);

@@ -123,9 +123,25 @@ namespace ActAditionalPlugin.Services
                 // 3. Build map placeholdere → valori
                 var map = BuildPlaceholderMap(def, formValues, common);
 
-                // 4. Replace in tot documentul
+                // 4. Replace in tot documentul (body)
                 foreach (var para in body.Descendants<Paragraph>().ToList())
                     WordHelper.MergeAndReplace(para, map);
+
+                // 4b. Replace si in header/footer — placeholderele simple (nu liste)
+                //     pot ajunge acolo daca autorul templateului a folosit
+                //     subsol/antet Word in loc de text in body.
+                foreach (var footerPart in doc.MainDocumentPart.FooterParts)
+                {
+                    foreach (var para in footerPart.Footer.Descendants<Paragraph>().ToList())
+                        WordHelper.MergeAndReplace(para, map);
+                    footerPart.Footer.Save();
+                }
+                foreach (var headerPart in doc.MainDocumentPart.HeaderParts)
+                {
+                    foreach (var para in headerPart.Header.Descendants<Paragraph>().ToList())
+                        WordHelper.MergeAndReplace(para, map);
+                    headerPart.Header.Save();
+                }
 
                 doc.MainDocumentPart.Document.Save();
             }
@@ -173,12 +189,24 @@ namespace ActAditionalPlugin.Services
                 }
                 else
                 {
-                    // Fiecare sub-camp al listei poate fi un placeholder expandabil
-                    foreach (var itemField in field.ItemFields)
+                    // Cheile "oficiale" (au propriul item_field) plus cheile mapate
+                    // din person_picker (maps{}) care nu au control propriu —
+                    // ex. NumeMembruSemnatura / NumeMembruTabel, disponibile in
+                    // randul din GetValues() dar fara sa fie declarate ca item_field.
+                    var ownKeys = field.ItemFields.Select(f2 => f2.Key).ToList();
+                    var mappedKeys = field.ItemFields
+                        .Where(f2 => f2.Maps != null)
+                        .SelectMany(f2 => f2.Maps.Keys)
+                        .Distinct()
+                        .ToList();
+                    var allKeys = ownKeys.Union(mappedKeys).ToList();
+
+                    // Fiecare cheie (oficiala sau mapata) poate fi un placeholder
+                    // expandabil, oriunde apare prima data in document.
+                    foreach (var key in allKeys)
                     {
-                        string marker = "{{" + itemField.Key + "}}";
-                        ExpandParagraphOrRow(body, marker, rows, itemField.Key,
-                            field.ItemFields.Select(f2 => f2.Key).ToList());
+                        string marker = "{{" + key + "}}";
+                        ExpandParagraphOrRow(body, marker, rows, key, allKeys);
                     }
                 }
             }
