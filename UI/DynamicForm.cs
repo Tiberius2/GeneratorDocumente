@@ -699,6 +699,18 @@ namespace ActAditionalPlugin.UI
                     dtp.ValueChanged += (s, e) => RunHooks("on_change", null);
                     return dtp;
 
+                case "datetime":
+                    var dtpFull = new DateTimePicker
+                    {
+                        Format = DateTimePickerFormat.Custom,
+                        CustomFormat = "dd.MM.yyyy HH:mm",
+                        Value = DateTime.Today,
+                        Font = FInput,
+                        Height = 26
+                    };
+                    dtpFull.ValueChanged += (s, e) => RunHooks("on_change", null);
+                    return dtpFull;
+
                 case "multiline":
                     var ml = MakeMultiline(MultilineHeight);
                     if (!string.IsNullOrEmpty(field.Placeholder))
@@ -710,6 +722,7 @@ namespace ActAditionalPlugin.UI
                     if (field.Options != null)
                         foreach (var opt in field.Options) cmb.Items.Add(opt);
                     if (cmb.Items.Count > 0) cmb.SelectedIndex = 0;
+                    cmb.SelectedIndexChanged += (s, e) => RunHooks("on_change", null);
                     return cmb;
 
                 case "person_picker":
@@ -792,7 +805,14 @@ namespace ActAditionalPlugin.UI
                             string targetKey = map.Key;   // key camp din formular
                             string personProp = map.Value; // proprietate din PersonInfo
 
+                            // Sufix ":upper" -> transforma valoarea in majuscule
+                            // Ex: "NumePrenumeInlocuitor": "NumeComplet:upper"
+                            bool upper = personProp.EndsWith(":upper", StringComparison.OrdinalIgnoreCase);
+                            if (upper) personProp = personProp.Substring(0, personProp.Length - ":upper".Length);
+
                             string val = GetPersonProperty(person, personProp);
+                            if (upper && val != null)
+                                val = val.ToUpper(new System.Globalization.CultureInfo("ro-RO"));
 
                             // Actualizeaza controlul vizual daca exista
                             if (_controls.ContainsKey(targetKey))
@@ -1210,6 +1230,7 @@ namespace ActAditionalPlugin.UI
             {
                 if (!field.Required) continue;
                 if (!_controls.ContainsKey(field.Key)) continue;
+                if (!string.IsNullOrEmpty(field.DependsOn) && !IsDependencyActive(field)) continue;
 
                 string val = GetControlValue(_controls[field.Key], field.Type)?.ToString() ?? string.Empty;
                 if (string.IsNullOrWhiteSpace(val))
@@ -1386,11 +1407,61 @@ namespace ActAditionalPlugin.UI
                         if (_controls.ContainsKey(key))
                             SetControlValue(_controls[key], _formValues[key]?.ToString() ?? string.Empty);
                     }
+                    ApplyFieldDependencies();
                 }
             }
             finally
             {
                 _hooksRunning = false;
+            }
+        }
+
+        // ══════════════════════════════════════════════════════
+        //  DEPENDS_ON — activeaza/dezactiveaza campuri in functie
+        //  de valoarea altui camp (ex. selector cu variante).
+        //  Campurile raman mereu vizibile; doar editabilitatea
+        //  comuta (readonly pentru text, enabled pentru restul).
+        // ══════════════════════════════════════════════════════
+        // Suporta conditii multiple (AND) separate prin "|", ex:
+        // depends_on = "TipCerere|TipRecuperareInvoire"
+        // depends_value = "Învoire|Cu zile/ore de recuperare"
+        private bool IsDependencyActive(FieldDefinition field)
+        {
+            if (string.IsNullOrEmpty(field.DependsOn)) return true;
+
+            var onKeys = field.DependsOn.Split('|');
+            var onValues = (field.DependsValue ?? string.Empty).Split('|');
+            bool active = onKeys.Length == onValues.Length;
+            for (int i = 0; active && i < onKeys.Length; i++)
+            {
+                object curObj;
+                string cur = _formValues.TryGetValue(onKeys[i], out curObj)
+                    ? (curObj != null ? curObj.ToString() : string.Empty)
+                    : string.Empty;
+                active = string.Equals(cur, onValues[i], StringComparison.Ordinal);
+            }
+            return active;
+        }
+
+        private void ApplyFieldDependencies()
+        {
+            foreach (var field in _def.Sections.SelectMany(s => s.Fields))
+            {
+                if (string.IsNullOrEmpty(field.DependsOn)) continue;
+                if (!_controls.ContainsKey(field.Key)) continue;
+
+                bool active = IsDependencyActive(field);
+                var ctrl = _controls[field.Key];
+                var tb = ctrl as TextBox;
+                if (tb != null)
+                {
+                    tb.ReadOnly = !active;
+                    tb.BackColor = active ? Color.White : Color.FromArgb(208, 213, 226);
+                }
+                else if (ctrl is DateTimePicker || ctrl is NumericUpDown || ctrl is ComboBox)
+                {
+                    ctrl.Enabled = active;
+                }
             }
         }
 
@@ -1727,7 +1798,9 @@ namespace ActAditionalPlugin.UI
         private static string GetControlValue(Control ctrl, string type)
         {
             if (ctrl is DateTimePicker dtp)
-                return dtp.Value.Date.ToString("dd.MM.yyyy");
+                return type == "datetime"
+                    ? dtp.Value.ToString("dd.MM.yyyy HH:mm")
+                    : dtp.Value.Date.ToString("dd.MM.yyyy");
             if (ctrl is ComboBox cmb)
                 return cmb.SelectedItem?.ToString() ?? string.Empty;
             if (ctrl is NumericUpDown nud2)

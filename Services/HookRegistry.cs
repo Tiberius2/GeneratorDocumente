@@ -60,6 +60,10 @@ namespace ActAditionalPlugin.Services
             _handlers["CalcDataSfarsitDinCNP"] = CalcDataSfarsitDinCNP;
             _handlers["CalcPerioadaSuspendare"] = CalcPerioadaSuspendare;
             _handlers["SetDefault"] = SetDefault;
+            _handlers["SetIfEquals"] = SetIfEquals;
+            _handlers["BlankIfNotEquals"] = BlankIfNotEquals;
+            _handlers["CalcZileLucratoare"] = CalcZileLucratoare;
+            _handlers["FormatPerioada"] = FormatPerioada;
         }
 
         // ══════════════════════════════════════════════════════
@@ -392,6 +396,10 @@ namespace ActAditionalPlugin.Services
             if (!ctx.Params.TryGetValue("field", out field)) return;
             if (!ctx.Params.TryGetValue("value", out value)) return;
 
+            // Valori speciale rezolvate la runtime (nu pot fi hardcodate in JSON)
+            if (value == "{year}") value = DateTime.Today.Year.ToString();
+            else if (value == "{today}") value = DateTime.Today.ToString("dd.MM.yyyy");
+
             object existing;
             bool isEmpty = !ctx.FormValues.TryGetValue(field, out existing)
                         || existing == null
@@ -400,6 +408,156 @@ namespace ActAditionalPlugin.Services
 
             if (isEmpty)
                 ctx.FormValues[field] = value;
+        }
+
+        // ══════════════════════════════════════════════════════
+        //  HANDLER: SetIfEquals
+        //  Seteaza target_field la value_if_true / value_if_false,
+        //  in functie de valoarea curenta a source_field.
+        //  Util pentru bife (■/gol) si texte derivate dintr-o
+        //  selectie (ex. combo cu variante).
+        //
+        //  JSON: { "on": "on_generate", "handler": "SetIfEquals",
+        //          "params": { "source_field": "TipCerere",
+        //                      "equals": "Învoire",
+        //                      "target_field": "BifaInvoire",
+        //                      "value_if_true": "■",
+        //                      "value_if_false": "" } }
+        // ══════════════════════════════════════════════════════
+        private static void SetIfEquals(HookContext ctx)
+        {
+            string sourceField, equals, targetField;
+            if (!ctx.Params.TryGetValue("source_field", out sourceField)) return;
+            if (!ctx.Params.TryGetValue("equals", out equals)) return;
+            if (!ctx.Params.TryGetValue("target_field", out targetField)) return;
+
+            string valTrue, valFalse;
+            ctx.Params.TryGetValue("value_if_true", out valTrue);
+            ctx.Params.TryGetValue("value_if_false", out valFalse);
+
+            object srcObj;
+            string src = ctx.FormValues.TryGetValue(sourceField, out srcObj)
+                ? (srcObj != null ? srcObj.ToString() : string.Empty)
+                : string.Empty;
+
+            ctx.FormValues[targetField] = string.Equals(src, equals, StringComparison.Ordinal)
+                ? (valTrue ?? string.Empty)
+                : (valFalse ?? string.Empty);
+        }
+
+        // ══════════════════════════════════════════════════════
+        //  HANDLER: BlankIfNotEquals
+        //  Daca source_field NU e egal cu "equals", suprascrie
+        //  target_field cu "blank" (ex. linie punctata albastra).
+        //  Daca E egal, lasa target_field neatins — valoarea reala
+        //  introdusa de utilizator ramane vizibila.
+        //  Poate fi inlantuit: mai multe hook-uri pe acelasi
+        //  target_field (verificand campuri diferite) — o data
+        //  blancat, ramane blancat (hook-urile ulterioare care
+        //  gasesc egalitate nu il ating).
+        //
+        //  JSON: { "on": "on_generate", "handler": "BlankIfNotEquals",
+        //          "params": { "source_field": "TipCerere",
+        //                      "equals": "Învoire",
+        //                      "target_field": "MotivInvoire",
+        //                      "blank": "_ _ _ _ _ _ _ _ _ _ _ _ _ _ _" } }
+        // ══════════════════════════════════════════════════════
+        private static void BlankIfNotEquals(HookContext ctx)
+        {
+            string sourceField, equals, targetField, blank;
+            if (!ctx.Params.TryGetValue("source_field", out sourceField)) return;
+            if (!ctx.Params.TryGetValue("equals", out equals)) return;
+            if (!ctx.Params.TryGetValue("target_field", out targetField)) return;
+            if (!ctx.Params.TryGetValue("blank", out blank)) return;
+
+            object srcObj;
+            string src = ctx.FormValues.TryGetValue(sourceField, out srcObj)
+                ? (srcObj != null ? srcObj.ToString() : string.Empty)
+                : string.Empty;
+
+            if (!string.Equals(src, equals, StringComparison.Ordinal))
+                ctx.FormValues[targetField] = blank;
+        }
+
+        // ══════════════════════════════════════════════════════
+        //  HANDLER: CalcZileLucratoare
+        //  Numara zilele lucratoare (luni-vineri) intre doua date,
+        //  capete incluse. Scrie in target_field; ramane editabil
+        //  manual dupa — se recalculeaza doar cand se schimba
+        //  din nou una din date (acelasi tipar ca CalcDataSfarsitDinCNP).
+        //
+        //  JSON: { "on": "on_change", "handler": "CalcZileLucratoare",
+        //          "params": { "start_field": "DataInceputInterval",
+        //                      "end_field": "DataSfarsitInterval",
+        //                      "target_field": "NrZile" } }
+        // ══════════════════════════════════════════════════════
+        private static void CalcZileLucratoare(HookContext ctx)
+        {
+            string startField, endField, targetField;
+            if (!ctx.Params.TryGetValue("start_field", out startField)) return;
+            if (!ctx.Params.TryGetValue("end_field", out endField)) return;
+            if (!ctx.Params.TryGetValue("target_field", out targetField)) return;
+
+            object startObj, endObj;
+            if (!ctx.FormValues.TryGetValue(startField, out startObj)) return;
+            if (!ctx.FormValues.TryGetValue(endField, out endObj)) return;
+
+            DateTime start, end;
+            if (!DateTime.TryParse(startObj != null ? startObj.ToString() : null, out start)) return;
+            if (!DateTime.TryParse(endObj != null ? endObj.ToString() : null, out end)) return;
+            if (end < start) return;
+
+            int zile = 0;
+            for (DateTime d = start.Date; d <= end.Date; d = d.AddDays(1))
+                if (d.DayOfWeek != DayOfWeek.Saturday && d.DayOfWeek != DayOfWeek.Sunday)
+                    zile++;
+
+            ctx.FormValues[targetField] = zile.ToString();
+        }
+
+        // ══════════════════════════════════════════════════════
+        //  HANDLER: FormatPerioada
+        //  Combina doua campuri "datetime" (start/sfarsit) intr-un
+        //  interval text, cu sau fara ora — in functie de un camp
+        //  "tip" (ex. combo "Zile"/"Ore"). Daca tip_field lipseste
+        //  sau nu se potriveste cu tip_ore_value, formateaza doar data.
+        //
+        //  JSON: { "on": "on_generate", "handler": "FormatPerioada",
+        //          "params": { "start_field": "DataInceputRecuperare",
+        //                      "end_field": "DataSfarsitRecuperare",
+        //                      "tip_field": "TipIntervalRecuperare",
+        //                      "tip_ore_value": "Ore",
+        //                      "target_field": "PerioadaRecuperare" } }
+        // ══════════════════════════════════════════════════════
+        private static void FormatPerioada(HookContext ctx)
+        {
+            string startField, endField, targetField, tipField, tipOreValue;
+            if (!ctx.Params.TryGetValue("start_field", out startField)) return;
+            if (!ctx.Params.TryGetValue("end_field", out endField)) return;
+            if (!ctx.Params.TryGetValue("target_field", out targetField)) return;
+            ctx.Params.TryGetValue("tip_field", out tipField);
+            ctx.Params.TryGetValue("tip_ore_value", out tipOreValue);
+
+            object startObj, endObj;
+            if (!ctx.FormValues.TryGetValue(startField, out startObj)) return;
+            if (!ctx.FormValues.TryGetValue(endField, out endObj)) return;
+
+            DateTime start, end;
+            if (!DateTime.TryParse(startObj != null ? startObj.ToString() : null, out start)) return;
+            if (!DateTime.TryParse(endObj != null ? endObj.ToString() : null, out end)) return;
+
+            bool cuOra = false;
+            if (!string.IsNullOrEmpty(tipField))
+            {
+                object tipObj;
+                string tipVal = ctx.FormValues.TryGetValue(tipField, out tipObj)
+                    ? (tipObj != null ? tipObj.ToString() : string.Empty)
+                    : string.Empty;
+                cuOra = string.Equals(tipVal, tipOreValue, StringComparison.Ordinal);
+            }
+
+            string fmt = cuOra ? "dd.MM.yyyy HH:mm" : "dd.MM.yyyy";
+            ctx.FormValues[targetField] = start.ToString(fmt) + " - " + end.ToString(fmt);
         }
 
         public static void Register(string name, Action<HookContext> handler)

@@ -26,6 +26,51 @@ namespace ActAditionalPlugin.Services
         //  Entry points
         // ══════════════════════════════════════════════════════
 
+        // ══════════════════════════════════════════════════════
+        //  ResolvePersonFolder
+        //  Gaseste (sau creeaza) folderul angajatului in
+        //  RecruitmentDocsPath. Cauta dupa PrsnId (nu dupa nume) —
+        //  PrsnId nu se schimba niciodata; NumeSalariat se poate
+        //  schimba (ex. diacritice adaugate dupa scanarea CI).
+        //  Daca am reconstrui numele folderului din numele curent,
+        //  un angajat cu numele actualizat ar primi un folder NOU,
+        //  fragmentand documentele intre "5097 - Balauna Ciprian"
+        //  (vechi) si "5097 - Bălăună Ciprian" (nou). Cautam intai
+        //  orice folder existent cu prefixul "{PrsnId} - " si il
+        //  refolosim ca atare — nu il redenumim.
+        //  Folosita si de UI (buton "deschide dosarul"), nu doar
+        //  la generare — de asta e public si separata.
+        // ══════════════════════════════════════════════════════
+        public static string ResolvePersonFolder(int prsnId, string numeSalariat,
+            bool createIfMissing = true)
+        {
+            string basePath = Environment.GetEnvironmentVariable("RecruitmentDocsPath");
+            if (string.IsNullOrWhiteSpace(basePath))
+                throw new InvalidOperationException(
+                    "Variabila de sistem RecruitmentDocsPath nu este setata.");
+
+            string idPrefix = prsnId + " - ";
+            string outputDir = null;
+
+            if (Directory.Exists(basePath))
+            {
+                outputDir = Directory.GetDirectories(basePath)
+                    .FirstOrDefault(d => Path.GetFileName(d)
+                        .StartsWith(idPrefix, StringComparison.Ordinal));
+            }
+
+            if (outputDir == null)
+            {
+                string candidateFolder = string.Format("{0} - {1}", prsnId, numeSalariat);
+                outputDir = Path.Combine(basePath, candidateFolder);
+            }
+
+            if (createIfMissing && !Directory.Exists(outputDir))
+                Directory.CreateDirectory(outputDir);
+
+            return outputDir;
+        }
+
         /// <summary>
         /// Genereaza PDF final in folderul angajatului.
         /// </summary>
@@ -34,16 +79,7 @@ namespace ActAditionalPlugin.Services
             Dictionary<string, object> formValues,
             CommonDocumentValues common)
         {
-            string basePath = Environment.GetEnvironmentVariable("RecruitmentDocsPath");
-            if (string.IsNullOrWhiteSpace(basePath))
-                throw new InvalidOperationException(
-                    "Variabila de sistem RecruitmentDocsPath nu este setata.");
-
-            string candidateFolder = string.Format("{0} - {1}",
-                common.PrsnId, common.NumeSalariat);
-            string outputDir = Path.Combine(basePath, candidateFolder);
-            if (!Directory.Exists(outputDir))
-                Directory.CreateDirectory(outputDir);
+            string outputDir = ResolvePersonFolder(common.PrsnId, common.NumeSalariat);
 
             string pdfFileName = BuildPdfFileName(def, formValues, common);
             string pdfPath = Path.Combine(outputDir, pdfFileName);

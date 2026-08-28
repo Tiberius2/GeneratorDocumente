@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Linq;
 using System.Windows.Forms;
 using ActAditionalPlugin.Models;
+using ActAditionalPlugin.Properties;
 using ActAditionalPlugin.Services;
 
 namespace ActAditionalPlugin.UI
@@ -24,6 +26,9 @@ namespace ActAditionalPlugin.UI
         private readonly List<PersonInfo> _persoane;
         private readonly int _currentPrsnId;
         private Button _btnAngajat;
+        private Button _btnDosar;
+        private bool _btnDosarHovered = false;
+        private bool _btnDosarPressed = false;
         private double _pulsePhase = 0;   // faza animatie badge pulsant
         private bool _btnAngajatHovered = false;
         private Button _btnContinua;
@@ -222,6 +227,43 @@ namespace ActAditionalPlugin.UI
             pnlHeader.Resize += (s, e) =>
                 _btnAngajat.Top = (pnlHeader.Height - _btnAngajat.Height) / 2;
             _btnAngajat.Left = 16;
+
+            // ── Buton "deschide dosarul angajatului" ──────────
+            // Vizibil doar cand e selectat un angajat; deschide in
+            // Explorer folderul unde se salveaza documentele lui
+            // (acelasi folder folosit la generare — cautat dupa
+            // PrsnId, vezi DynamicTemplateEngine.ResolvePersonFolder).
+            // Desenat complet in Paint, ca sa arate ca o extensie a
+            // butonului de angajat (aceleasi culori/rotunjire), nu
+            // ca un buton standard Windows.
+            _btnDosar = new Button
+            {
+                Height = 56,
+                Width = 190,
+                FlatStyle = FlatStyle.Flat,
+                Cursor = Cursors.Hand,
+                Anchor = AnchorStyles.Left | AnchorStyles.Top,
+                UseVisualStyleBackColor = false,
+                Text = "",   // tot continutul e desenat in Paint
+                Visible = SelectedPerson != null
+            };
+            _btnDosar.FlatAppearance.BorderSize = 0;
+            _btnDosar.Paint += (s, e) => DrawDosarButton(e.Graphics, _btnDosar);
+            _btnDosar.Click += OnDeschideDosar;
+            _btnDosar.MouseEnter += (s, e) => { _btnDosarHovered = true; _btnDosar.Invalidate(); };
+            _btnDosar.MouseLeave += (s, e) => { _btnDosarHovered = false; _btnDosarPressed = false; _btnDosar.Invalidate(); };
+            _btnDosar.MouseDown += (s, e) => { _btnDosarPressed = true; _btnDosar.Invalidate(); };
+            _btnDosar.MouseUp += (s, e) => { _btnDosarPressed = false; _btnDosar.Invalidate(); };
+
+            var toolTipDosar = new ToolTip();
+            toolTipDosar.SetToolTip(_btnDosar, "Deschide dosarul angajatului");
+
+            pnlHeader.Controls.Add(_btnDosar);
+            pnlHeader.HandleCreated += (s, e) =>
+                _btnDosar.Top = (pnlHeader.Height - _btnDosar.Height) / 2;
+            pnlHeader.Resize += (s, e) =>
+                _btnDosar.Top = (pnlHeader.Height - _btnDosar.Height) / 2;
+            _btnDosar.Left = _btnAngajat.Left + _btnAngajat.Width + 6;
 
             // Titlu dreapta
             var lblTitlu = new Label
@@ -425,6 +467,70 @@ namespace ActAditionalPlugin.UI
                         g.DrawString("✎", f, br, w - 28f, cy - 9f);
                 }
             }
+        }
+
+        // ══════════════════════════════════════════════════════
+        //  Buton "Dosar Personal" — desenat sa arate ca o extensie
+        //  a butonului de angajat (aceeasi rotunjire, aceleasi
+        //  culori de fundal/bordura/hover).
+        // ══════════════════════════════════════════════════════
+        private void DrawDosarButton(Graphics g, Button btn)
+        {
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+
+            int w = btn.Width, h = btn.Height;
+            int cy = h / 2;
+            const int Radius = 8;
+
+            // Culoare distincta de butonul de angajat (nu identica —
+            // se citeste ca "actiune secundara", nu ca alt selector),
+            // dar tot in gama rece/inchisa a header-ului. Bordura calda
+            // (auriu-stins) preia culoarea iconitei de dosar.
+            Color bgColor = _btnDosarPressed
+                ? Color.FromArgb(46, 60, 56)
+                : _btnDosarHovered
+                    ? Color.FromArgb(78, 96, 90)
+                    : Color.FromArgb(58, 74, 70);
+            Color borderColor = _btnDosarPressed
+                ? Color.FromArgb(158, 128, 70)
+                : Color.FromArgb(191, 155, 89);
+
+            // Efect de apasare: fundalul/bordura raman pe loc (0,0),
+            // dar tot continutul (icon + text) se muta 1px in jos —
+            // senzatia de "impins", ca la un buton fizic.
+            int pressOffset = _btnDosarPressed ? 1 : 0;
+
+            // Fundalul header-ului — colturile rotunjite par transparente
+            g.Clear(BgDark);
+
+            using (var path = RoundedRect(new Rectangle(1, 1, w - 2, h - 2), Radius))
+            {
+                g.FillPath(new SolidBrush(bgColor), path);
+                using (var pen = new Pen(borderColor, 1.5f))
+                    g.DrawPath(pen, path);
+            }
+
+            Image icon = Resources.dosar_personal;
+
+            float textX = 18f;
+            if (icon != null)
+            {
+                int iconSize = 22;
+                g.DrawImage(icon, 18, cy - iconSize / 2 + pressOffset, iconSize, iconSize);
+                textX = 18f + iconSize + 10f;
+            }
+
+            using (var sf = new StringFormat
+            {
+                Trimming = StringTrimming.EllipsisCharacter,
+                FormatFlags = StringFormatFlags.NoWrap,
+                LineAlignment = StringAlignment.Center
+            })
+            using (var f = new Font("Segoe UI", 9.5f, FontStyle.Bold))
+            using (var br = new SolidBrush(Color.FromArgb(232, 238, 248)))
+                g.DrawString("Dosar Personal", f, br,
+                    new RectangleF(textX, pressOffset, w - textX - 10f, h), sf);
         }
 
         private static GraphicsPath RoundedRect(Rectangle r, int radius)
@@ -654,6 +760,7 @@ namespace ActAditionalPlugin.UI
         private void UpdateAngajatButton()
         {
             _btnAngajat?.Invalidate();
+            if (_btnDosar != null) _btnDosar.Visible = SelectedPerson != null;
         }
 
         private static string GetInitiale(string numeComplet)
@@ -662,6 +769,23 @@ namespace ActAditionalPlugin.UI
             var parts = numeComplet.Trim().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length == 1) return parts[0].Substring(0, Math.Min(2, parts[0].Length)).ToUpper();
             return (parts[0].Substring(0, 1) + parts[1].Substring(0, 1)).ToUpper();
+        }
+
+        private void OnDeschideDosar(object sender, EventArgs e)
+        {
+            if (SelectedPerson == null) return;
+
+            try
+            {
+                string path = DynamicTemplateEngine.ResolvePersonFolder(
+                    SelectedPerson.PrsnId, SelectedPerson.NumeComplet);
+                Process.Start("explorer.exe", path);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Nu am putut deschide dosarul angajatului: " + ex.Message,
+                    "Eroare", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
         }
 
         private void OnSelectAngajat(object sender, EventArgs e)

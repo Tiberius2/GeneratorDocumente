@@ -93,7 +93,8 @@ namespace ActAditionalPlugin.Models
         // Tipuri posibile:
         //   text          — TextBox simplu
         //   multiline     — TextBox multiline
-        //   date          — DateTimePicker
+        //   date          — DateTimePicker (doar data)
+        //   datetime      — DateTimePicker (data + ora, format dd.MM.yyyy HH:mm)
         //   readonly      — TextBox readonly (ex. CodInregistrare, NrCim)
         //   person_picker — buton + campuri autocomplete din PersonPickerDialog
         //   dynamic_list  — sectiune cu add/delete rows (membri, echipamente etc)
@@ -112,6 +113,16 @@ namespace ActAditionalPlugin.Models
 
         [JsonProperty("placeholder")]
         public string Placeholder { get; set; }
+
+        // ── Editabilitate conditionata ────────────────────────
+        // Campul devine needitabil (readonly/disabled) daca valoarea
+        // curenta a campului "depends_on" nu e exact "depends_value".
+        // Ex: { "depends_on": "TipCerere", "depends_value": "Învoire" }
+        [JsonProperty("depends_on")]
+        public string DependsOn { get; set; }
+
+        [JsonProperty("depends_value")]
+        public string DependsValue { get; set; }
 
         // ── Pentru type: person_picker ────────────────────────
         // Ce campuri se autocompleteaza la selectia persoanei.
