@@ -52,34 +52,30 @@ namespace ActAditionalPlugin.Models
             Color.FromArgb(195, 165, 225),
             Color.FromArgb(92, 40, 140));
 
-        // ── Factory ───────────────────────────────────────────
-        public static DocumentTheme For(TipDocument tip)
+        // ── Factory pe nume folder (noul sistem data-driven) ──
+        public static DocumentTheme ForCategory(string categoryName)
         {
-            switch (tip)
-            {
-                case TipDocument.ActAditional:
-                    return Acte;
+            if (string.IsNullOrEmpty(categoryName))
+                return Acte;
 
-                case TipDocument.SuspendareCresterecopil:
-                case TipDocument.SuspendareCresterecopilHandicap:
-                case TipDocument.SuspendareAbsenteNemotivate:
-                case TipDocument.SuspendareAcordParti:
-                case TipDocument.SuspendareSiIncetareSuspendare:
-                    return Suspendare;
+            string lower = categoryName.ToLower();
 
-                case TipDocument.ReferatDisciplinar:
-                case TipDocument.AvertismentDisciplinar:
-                case TipDocument.DecizieConstituireComisie:
-                case TipDocument.ConvocareCercetare:
-                case TipDocument.ProcesVerbalCercetare:
-                case TipDocument.IncetareDisciplinar:
-                    return CercetareDisciplinara;
+            if (lower.Contains("acte") || lower.Contains("aditional"))
+                return Acte;
 
-                default:
-                    return Incetare;
-            }
+            if (lower.Contains("suspendare"))
+                return Suspendare;
+
+            if (lower.Contains("incetare"))
+                return Incetare;
+
+            if (lower.Contains("cercetare") || lower.Contains("disciplinar"))
+                return CercetareDisciplinara;
+
+            if (lower.Contains("verbale") || lower.Contains("procese"))
+                return Pv;
+
+            return Acte;
         }
-
-        public static DocumentTheme For(TipPV tip) => Pv;
     }
 }

@@ -16,73 +16,27 @@ namespace ActAditionalPlugin
         }
 
         /// <summary>
-        /// Folderul cu template-urile .docx — din variabila de sistem TemplateDocsPath.
-        /// Fallback la Resources/ langa DLL daca variabila nu e setata.
+        /// Folderul radacina cu template-urile — din variabila de sistem TemplateDocsPath.
+        /// Structura asteptata: {TemplatesRoot}/{Categorie}/{document.json + document.docx}
+        /// Fallback la Resources/Templates/ langa DLL daca variabila nu e setata.
         /// </summary>
-        private static string TemplatesDir
+        public static string TemplatesRoot
         {
             get
             {
                 string envPath = System.Environment.GetEnvironmentVariable("TemplateDocsPath");
-                return !string.IsNullOrWhiteSpace(envPath) ? envPath : ResourcesDir;
+                if (!string.IsNullOrWhiteSpace(envPath) && System.IO.Directory.Exists(envPath))
+                    return envPath;
+                return Path.Combine(_baseDir, "Templates");
             }
         }
 
-        public static string GetTemplatePath(TipPV tip)
+        // Pastrat pentru compatibilitate — nu mai e folosit in noul sistem
+        private static string TemplatesDir
         {
-            string fileName;
-            switch (tip)
-            {
-                case TipPV.Echipamente: fileName = "template_pv_echipamente.docx"; break;
-                case TipPV.Electronice: fileName = "template_pv_echipamente.docx"; break;
-                case TipPV.Autovehicul: fileName = "template_pv_autovehicul.docx"; break;
-                default: fileName = string.Empty; break;
-            }
-            return Path.Combine(TemplatesDir, fileName);
+            get { return TemplatesRoot; }
         }
 
-        public static string GetTemplatePath(TipDocument tip)
-        {
-            string fileName;
-            switch (tip)
-            {
-                case TipDocument.ActAditional:
-                    fileName = "ActAditional_template.docx"; break;
-                case TipDocument.SuspendareCresterecopil:
-                    fileName = "template_suspendare_crestere_copil.docx"; break;
-                case TipDocument.SuspendareCresterecopilHandicap:
-                    fileName = "template_suspendare_crestere_copil_handicap.docx"; break;
-                case TipDocument.SuspendareAbsenteNemotivate:
-                    fileName = "template_suspendare_absente_nemotivate.docx"; break;
-                case TipDocument.SuspendareAcordParti:
-                    fileName = "template_suspendare_acord_parti.docx"; break;
-                case TipDocument.SuspendareSiIncetareSuspendare:
-                    fileName = "template_suspendare_si_incetare_suspendare.docx"; break;
-                case TipDocument.IncetareSuspendare:
-                    fileName = "template_incetare_suspendare.docx"; break;
-                case TipDocument.IncetareDemisie:
-                    fileName = "template_incetare_demisie.docx"; break;
-                case TipDocument.IncetareExpirare:
-                    fileName = "template_incetare_expirare_termen.docx"; break;
-                case TipDocument.IncetareDisciplinar:
-                    fileName = "template_incetare_disciplinar.docx"; break;
-                case TipDocument.IncetarePerioadaProba:
-                    fileName = "template_incetare_perioada_proba.docx"; break;
-                case TipDocument.ReferatDisciplinar:
-                    fileName = "template_referat_disciplinar.docx"; break;
-                case TipDocument.AvertismentDisciplinar:
-                    fileName = "template_avertisment.docx"; break;
-                case TipDocument.DecizieConstituireComisie:
-                    fileName = "template_decizie_constituire_comisie.docx"; break;
-                case TipDocument.ConvocareCercetare:
-                    fileName = "template_convocare_cercetare.docx"; break;
-                case TipDocument.ProcesVerbalCercetare:
-                    fileName = "template_pv_cercetare_disciplinara.docx"; break;
-                default:
-                    fileName = string.Empty; break;
-            }
-            return Path.Combine(TemplatesDir, fileName);
-        }
 
         public static string LogoPath
         {

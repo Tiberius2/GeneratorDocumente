@@ -11,6 +11,13 @@ namespace ActAditionalPlugin.Services
     // Utilitare OpenXML + Word Interop partajate intre TemplateEngine si PvTemplateEngine
     internal static class WordHelper
     {
+        // Marker folosit de hook-ul BlankIfNotEquals pentru variantele
+        // neselectate (ex. Cerere CO/Vatra). Cand valoarea unui placeholder
+        // e exact acest text, run-ul e colorat albastru la generare —
+        // valorile reale raman in formatarea originala din template.
+        internal const string BlankLineMarker = "_ _ _ _ _ _ _ _ _ _ _ _ _ _ _";
+        private const string BlankLineColorHex = "0070C0";
+
         internal static string SanitizeFileName(string input)
         {
             if (string.IsNullOrWhiteSpace(input)) return "_";
@@ -128,6 +135,12 @@ namespace ActAditionalPlugin.Services
                 }
 
                 RunProperties phRpr = posToRpr.ContainsKey(phIdx) ? posToRpr[phIdx] : null;
+                if (value == BlankLineMarker)
+                {
+                    phRpr = phRpr != null ? (RunProperties)phRpr.CloneNode(true) : new RunProperties();
+                    phRpr.RemoveAllChildren<Color>();
+                    phRpr.PrependChild(new Color { Val = BlankLineColorHex });
+                }
                 if (value.Length > 0)
                 {
                     result.Add(value.IndexOf('\n') >= 0 || value.IndexOf('\r') >= 0

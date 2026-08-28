@@ -45,6 +45,9 @@ namespace ActAditionalPlugin.UI
 
         public Action OnDelete { get; set; }
 
+        // Apelat de DynamicForm pentru a relayouta panelul parinte dupa ce inaltime se schimba
+        public Action OnHeightChanged { get; set; }
+
         // ══════════════════════════════════════════════════════
         public PunctModificareControl(int numar, List<ClauzeActAditional> clauze)
         {
@@ -383,10 +386,17 @@ namespace ActAditionalPlugin.UI
                 textH = (int)sz.Height + 4;
             }
 
+            int textTop = 6 + refH + (refH > 0 ? 2 : 0);
             _lblPreviewRef.Top = 6; _lblPreviewRef.Height = refH;
-            _lblPreviewText.Top = 6 + refH + (refH > 0 ? 2 : 0);
+            _lblPreviewText.Top = textTop;
             _lblPreviewText.Height = textH;
-            _pnlPreview.Height = 6 + refH + (refH > 0 ? 2 : 0) + textH + _btnEdit.Height + 12;
+            // Butonul Edit sub text, nu suprapus
+            if (_btnEdit != null)
+            {
+                _btnEdit.Top = textTop + textH + 6;
+                _btnEdit.Left = (_pnlPreview.Width > 0 ? _pnlPreview.Width : 400) - _btnEdit.Width - 8;
+            }
+            _pnlPreview.Height = textTop + textH + (textH > 0 ? 6 : 0) + _btnEdit.Height + 10;
             RecalcHeight();
         }
 
@@ -470,7 +480,7 @@ namespace ActAditionalPlugin.UI
                 _pnlPreview.Left = 12; _pnlPreview.Top = previewTop; _pnlPreview.Width = innerW;
                 if (_lblPreviewRef != null) _lblPreviewRef.Width = innerW - 110;
                 if (_lblPreviewText != null) _lblPreviewText.Width = innerW - 16;
-                if (_btnEdit != null) { _btnEdit.Top = 6; _btnEdit.Left = innerW - _btnEdit.Width - 8; }
+                // Pozitia _btnEdit e setata in UpdatePreview, nu o resetam aici
             }
 
             int editTop = previewTop + (_pnlPreview?.Height ?? 0) + (_pnlPreview?.Height > 0 ? 4 : 0);
@@ -490,7 +500,12 @@ namespace ActAditionalPlugin.UI
             if (_pnlPreview?.Height > 0) h += _pnlPreview.Height + 4;
             if (_pnlEdit?.Height > 0) h += _pnlEdit.Height + 4;
             h += 8;
-            Height = Math.Max(h, 50);
+            int newH = Math.Max(h, 50);
+            if (newH != Height)
+            {
+                Height = newH;
+                if (OnHeightChanged != null) OnHeightChanged();
+            }
         }
 
         // ── Helpers ───────────────────────────────────────────

@@ -1,5 +1,6 @@
 ﻿using System;
 using Softone;
+using ActAditionalPlugin.Models;
 
 namespace ActAditionalPlugin.Services
 {
@@ -9,6 +10,9 @@ namespace ActAditionalPlugin.Services
         public DateTime DataCim { get; set; }
         public string NumeDepartament { get; set; }
         public string CodCor { get; set; }
+        public string SerieCI { get; set; }
+        public string NrCI { get; set; }
+        public string Domiciliu { get; set; }
 
         public ErpCimData()
         {
@@ -77,15 +81,10 @@ namespace ActAditionalPlugin.Services
                     "    C.IBAN       AS IbanCompanie, " +
                     "    C.PHONE1     AS NrTelefonCompanie, " +
                     "    C.EMAIL      AS EmailCompanie, " +
-                    "    C.WEBPAGE    AS WebsiteCompanie, " +
-                    "    S.NAME       AS FunctieReprezentant " +
+                    "    C.WEBPAGE    AS WebsiteCompanie " +
                     "FROM COMPANY C " +
-                    "JOIN COMPANYEXT CEXT ON C.COMPANY = CEXT.COMPANY " +
-                    "LEFT JOIN PRSN P ON P.COMPANY = C.COMPANY " +
-                    "    AND P.NAME  LIKE '%' + CEXT.NAME  + '%' " +
-                    "    AND P.NAME2 LIKE '%' + CEXT.NAME2 + '%' " +
-                    "LEFT JOIN SPECIALTY S ON P.SPECIALTY = S.SPECIALTY " +
-                    "WHERE CEXT.ACCTOFFICE = 2 AND C.COMPANY = " + companyId;
+                    "JOIN COMPANYEXT CEXT ON C.COMPANY = CEXT.COMPANY AND CEXT.ACCTOFFICE = 2 " +
+                    "WHERE C.COMPANY = " + companyId;
 
                 var ds = xSupport.GetSQLDataSet(sql);
 
@@ -94,7 +93,9 @@ namespace ActAditionalPlugin.Services
                     result.NumeAngajator = ds[0, "NumeAngajator"]?.ToString()?.Trim() ?? string.Empty;
                     result.CIFAngajator = ds[0, "CIFAngajator"]?.ToString()?.Trim() ?? string.Empty;
                     result.ReprezentantLegal = ds[0, "ReprezentantLegalNume"]?.ToString()?.Trim() ?? string.Empty;
-                    result.FunctieReprezentant = ds[0, "FunctieReprezentant"]?.ToString()?.Trim() ?? string.Empty;
+                    // FunctieReprezentant — din PluginConfig (configurata manual)
+                    result.FunctieReprezentant = PluginConfig.FunctieReprezentant;
+
                     result.AdresaCompanie = ds[0, "AdresaCompanie"]?.ToString()?.Trim() ?? string.Empty;
                     result.ZipCompanie = ds[0, "ZipCompanie"]?.ToString()?.Trim() ?? string.Empty;
                     result.NrRegComertului = ds[0, "NrRegComertului"]?.ToString()?.Trim() ?? string.Empty;
@@ -107,6 +108,8 @@ namespace ActAditionalPlugin.Services
                 {
                     xSupport.Warning("ActAditional: nu s-au gasit date companie pentru COMPANY " + companyId);
                 }
+
+
             }
             catch (Exception ex)
             {
@@ -127,8 +130,10 @@ namespace ActAditionalPlugin.Services
             {
                 int companyId = xSupport.ConnectionInfo.CompanyId;
                 var ds = xSupport.GetSQLDataSet(
-                    "SELECT PEX.NUM03 AS NrCim, PEX.DATE03 AS DataCim, " +
-                    "ISNULL(D.NAME, '') AS NumeDepartament " +
+                    "SELECT PEX.CCCVARCHAR05 AS NrCim, PEX.DATE03 AS DataCim, " +
+                    "ISNULL(D.NAME, '') AS NumeDepartament, " +
+                    "ISNULL(P.IDENTITYNUM, '') AS IdentityNum, " +
+                    "ISNULL(P.ADDRESS, '') AS Domiciliu " +
                     "FROM PRSEXTRA PEX " +
                     "JOIN PRSN P ON PEX.PRSN = P.PRSN " +
                     "LEFT JOIN DEPART D ON P.DEPART = D.DEPART AND D.COMPANY = " + companyId + " " +
@@ -136,12 +141,7 @@ namespace ActAditionalPlugin.Services
 
                 if (ds != null && ds.Count > 0)
                 {
-                    var nrCimObj = ds[0, "NrCim"];
-
-                    if (nrCimObj != null && nrCimObj != DBNull.Value)
-                        result.NrCim = Convert.ToInt32(nrCimObj).ToString();
-                    else
-                        result.NrCim = string.Empty;
+                    result.NrCim = ds[0, "NrCim"]?.ToString()?.Trim() ?? string.Empty;
 
                     DateTime parsedDate;
                     string rawDate = ds[0, "DataCim"]?.ToString() ?? string.Empty;
@@ -149,6 +149,14 @@ namespace ActAditionalPlugin.Services
                         result.DataCim = parsedDate;
 
                     result.NumeDepartament = ds[0, "NumeDepartament"]?.ToString()?.Trim() ?? string.Empty;
+
+                    // SerieCI + NrCI din IDENTITYNUM
+                    string identityNum = ds[0, "IdentityNum"]?.ToString()?.Trim() ?? string.Empty;
+                    string serie, nrci;
+                    PersonInfo.ParseIdentityNum(identityNum, out serie, out nrci);
+                    result.SerieCI = serie;
+                    result.NrCI = nrci;
+                    result.Domiciliu = ds[0, "Domiciliu"]?.ToString()?.Trim() ?? string.Empty;
                 }
                 else
                 {

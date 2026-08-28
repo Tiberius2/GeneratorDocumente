@@ -4,11 +4,221 @@ using ActAditionalPlugin.UI;
 using Softone;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading;
 using System.Windows.Forms;
 
 namespace ActAditionalPlugin
 {
+    // ══════════════════════════════════════════════════════════
+    //  S1 — populeaza XSupport static la incarcarea pluginului.
+    //  Necesar pentru apelul direct ca "Dll Form" din Softone
+    //  (Tip operatie: Dll Form, Obiect/Fisier: ActAditionalPlugin.dll;SelectorDialog),
+    //  unde Softone instantiaza formul direct prin reflection,
+    //  fara sa treaca prin ExecCommand. SelectorDialog() foloseste
+    //  S1.xSupp pentru a-si incarca singur datele.
+    //  (acelasi pattern folosit in WacomSignaturePDF)
+    // ══════════════════════════════════════════════════════════
+    [WorksOn("GENERAL")]
+    public class S1 : TXCode
+    {
+        public static XSupport xSupp;
+        public override void Initialize() { base.Initialize(); xSupp = XSupport; }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  CMD 4000502 — apelabil din orice meniu Softone, fara a
+    //  depinde de ecranul PRSNIN. Userul alege angajatul direct
+    //  din SelectorDialog.
+    //  [WorksOn("GENERAL")] = nu necesita context de ecran specific
+    //  (acelasi pattern folosit in WacomSignaturePDF).
+    // ══════════════════════════════════════════════════════════
+    [WorksOn("GENERAL")]
+    public class ProgramGeneral : TXCode
+    {
+        private static Form _activeFormGeneral;
+        private static Mutex _mutexGeneral;
+        private const string MutexNameGeneral = "ActAditionalPlugin_SingleInstance";
+
+        private static string TemplatesRoot
+        {
+            get
+            {
+                string configured = PluginConfig.TemplatesRoot;
+                if (!string.IsNullOrWhiteSpace(configured) && Directory.Exists(configured))
+                    return configured;
+
+                string dllDir = Path.GetDirectoryName(
+                    System.Reflection.Assembly.GetExecutingAssembly().Location);
+                return Path.Combine(dllDir, "Templates");
+            }
+        }
+
+        public override object ExecCommand(int Cmd)
+        {
+            if (Cmd != 4000502)
+                return null;
+
+            try
+            {
+                // Single-instance guard (separat de cel din Program/PRSNIN,
+                // ca sa nu interfereze cu fluxul existent)
+                if (_activeFormGeneral != null && !_activeFormGeneral.IsDisposed)
+                {
+                    _activeFormGeneral.Invoke(new Action(() =>
+                    {
+                        if (_activeFormGeneral.WindowState == FormWindowState.Minimized)
+                            _activeFormGeneral.WindowState = FormWindowState.Normal;
+                        _activeFormGeneral.Activate();
+                    }));
+                    return base.ExecCommand(Cmd);
+                }
+
+                bool createdNew;
+                _mutexGeneral = new Mutex(true, MutexNameGeneral, out createdNew);
+                if (!createdNew)
+                {
+                    _mutexGeneral.Dispose(); _mutexGeneral = null;
+                    return base.ExecCommand(Cmd);
+                }
+
+                // ── Initializare servicii (pe thread-ul TXCode) ───
+               // PdfSharp.Fonts.GlobalFontSettings.UseWindowsFontsUnderWindows = true;
+                RegistraturaService.Initialize(XSupport);
+                HookRegistry.RegisterAll();
+
+                try
+                {
+                    DocumentRegistry.Initialize(TemplatesRoot);
+                }
+                catch (Exception ex)
+                {
+                    XSupport.Warning("Generator documente HR: Nu s-a putut incarca folderul Templates.\n" + ex.Message);
+                    ReleaseMutexGeneral();
+                    return base.ExecCommand(Cmd);
+                }
+
+                var persoane = PersonPickerDialog.LoadFromErp(XSupport);
+                var companyData = ErpDataProvider.GetCompanyData(XSupport);
+
+                BulkContext.XSupport = XSupport;
+                BulkContext.CompanyData = companyData;
+
+                var thread = new Thread(() =>
+                {
+                    try
+                    {
+                        RunLoopGeneral(companyData, persoane);
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show("Eroare:\n" + ex.Message,
+                            "Generator Documente HR",
+                            MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                    finally
+                    {
+                        _activeFormGeneral = null;
+                        BulkContext.Reset();
+                        ReleaseMutexGeneral();
+                    }
+                });
+
+                thread.SetApartmentState(ApartmentState.STA);
+                thread.IsBackground = true;
+                thread.Start();
+            }
+            catch (Exception ex)
+            {
+                XSupport.Warning("Generator documente HR error: " + ex.Message);
+                ReleaseMutexGeneral();
+            }
+
+            return base.ExecCommand(Cmd);
+        }
+
+        private void RunLoopGeneral(ErpCompanyData companyData, List<PersonInfo> persoane)
+        {
+            ErpCimData cimData = null;
+            int currentPrsnId = 0;
+
+            while (true)
+            {
+                DocumentDefinition selectedDoc;
+                PersonInfo selectedPerson;
+
+                using (var selector = new SelectorDialog(persoane, currentPrsnId))
+                {
+                    _activeFormGeneral = selector;
+                    if (selector.ShowDialog() != DialogResult.OK)
+                    {
+                        _activeFormGeneral = null;
+                        return;
+                    }
+
+                    selectedDoc = selector.SelectedDocument;
+                    selectedPerson = selector.SelectedPerson;
+                    _activeFormGeneral = null;
+                }
+
+                if (selectedPerson == null)
+                {
+                    XSupport.Warning("Selectează un angajat pentru a continua.");
+                    continue;
+                }
+
+                if (cimData == null || selectedPerson.PrsnId != currentPrsnId)
+                {
+                    cimData = ErpDataProvider.GetCimData(selectedPerson.PrsnId, BulkContext.XSupport);
+                    currentPrsnId = selectedPerson.PrsnId;
+                }
+
+                var common = CommonDocumentValues.FromErp(
+                    selectedPerson.PrsnId,
+                    selectedPerson.NumeComplet,
+                    selectedPerson.CNP,
+                    selectedPerson.Functie,
+                    cimData,
+                    companyData);
+
+                common.CodInregistrare = RegistraturaService.Instance.CalculateCod(
+                    RegistraturaService.Instance.GetLoginDate());
+
+                using (var form = new DynamicForm(selectedDoc, common, persoane))
+                {
+                    SetFormIconGeneral(form);
+                    _activeFormGeneral = form;
+                    form.ShowDialog();
+                    _activeFormGeneral = null;
+                }
+            }
+        }
+
+        private static void SetFormIconGeneral(Form form)
+        {
+            try
+            {
+                string icoPath = Path.Combine(
+                    Path.GetDirectoryName(
+                        System.Reflection.Assembly.GetExecutingAssembly().Location),
+                    "Resources", "softone.ico");
+                if (File.Exists(icoPath))
+                    form.Icon = new System.Drawing.Icon(icoPath);
+            }
+            catch { }
+        }
+
+        private void ReleaseMutexGeneral()
+        {
+            if (_mutexGeneral != null)
+            {
+                try { _mutexGeneral.ReleaseMutex(); } catch { }
+                _mutexGeneral.Dispose();
+                _mutexGeneral = null;
+            }
+        }
+    }
+
     [WorksOn("PRSNIN")]
     public class Program : TXCode
     {
@@ -16,13 +226,21 @@ namespace ActAditionalPlugin
         private static Mutex _mutex;
         private const string MutexName = "ActAditionalPlugin_SingleInstance";
 
-        // Date angajat citite la intrarea in comanda
-        private class PrsnInfo
+        // Calea catre folderul Templates (configurat in PluginConfig sau relativ la DLL)
+        private static string TemplatesRoot
         {
-            public int PrsnId;
-            public string NumeSalariat;
-            public string CNP;
-            public string Functie;
+            get
+            {
+                // Incearca din PluginConfig primul
+                string configured = PluginConfig.TemplatesRoot;
+                if (!string.IsNullOrWhiteSpace(configured) && Directory.Exists(configured))
+                    return configured;
+
+                // Fallback: langa DLL
+                string dllDir = Path.GetDirectoryName(
+                    System.Reflection.Assembly.GetExecutingAssembly().Location);
+                return Path.Combine(dllDir, "Templates");
+            }
         }
 
         public override void Initialize()
@@ -32,13 +250,19 @@ namespace ActAditionalPlugin
 
         public override object ExecCommand(int Cmd)
         {
-            if (Cmd != 4000501)
-                return null;
+            if (Cmd == 4000501)
+                return ExecOpenWithCurrentPrsn(Cmd);
 
+            return null;
+        }
+
+        // ══════════════════════════════════════════════════════
+        //  CMD 4000501 — deschide cu angajatul curent din PRSNIN
+        // ══════════════════════════════════════════════════════
+        private object ExecOpenWithCurrentPrsn(int Cmd)
+        {
             try
             {
-                DocumentFormBase.OnDocumentGenerated = AddDocumentToDatagrid;
-
                 // Single-instance guard
                 if (_activeForm != null && !_activeForm.IsDisposed)
                 {
@@ -55,106 +279,66 @@ namespace ActAditionalPlugin
                 _mutex = new Mutex(true, MutexName, out createdNew);
                 if (!createdNew)
                 {
-                    _mutex.Dispose();
-                    _mutex = null;
+                    _mutex.Dispose(); _mutex = null;
                     return base.ExecCommand(Cmd);
                 }
 
                 int companyId = XSupport.ConnectionInfo.CompanyId;
-                var prsn = TryReadPrsn(companyId);
-                if (prsn == null) return base.ExecCommand(Cmd);
 
-                // Pre-incarca lista angajatilor angajati (pe thread-ul TXCode)
-                var angajati = LoadHiredEmployees(companyId);
+                // ── Citeste angajatul curent din ecranul PRSNIN ───
+                var currentPrsn = TryReadCurrentPrsn(companyId);
+                if (currentPrsn == null)
+                {
+                    ReleaseMutex();
+                    return base.ExecCommand(Cmd);
+                }
 
-                ErpCimData cimData = ErpDataProvider.GetCimData(prsn.PrsnId, XSupport);
-                ErpCompanyData companyData = ErpDataProvider.GetCompanyData(XSupport);
-                string officialName = ReadOfficialName();
-                string adresaPrimitor = ReadAdresaPrimitor(prsn.PrsnId, companyId);
-
-                PdfSharp.Fonts.GlobalFontSettings.UseWindowsFontsUnderWindows = true;
+                // ── Initializare servicii (pe thread-ul TXCode) ───
+                // PdfSharp.Fonts.GlobalFontSettings.UseWindowsFontsUnderWindows = true;
                 RegistraturaService.Initialize(XSupport);
+                HookRegistry.RegisterAll();
 
-                // Seteaza contextul pentru generare in masa (captureaza XSupport pe thread-ul TXCode)
-                BulkContext.Angajati = angajati;
-                BulkContext.CompanyData = companyData;
-                BulkContext.GetCimData = prsnId => ErpDataProvider.GetCimData(prsnId, XSupport);
-                BulkContext.GetAdresaPrimitor = prsnId => ReadAdresaPrimitor(prsnId, companyId);
+                // ── Initializare DocumentRegistry ─────────────────
+                try
+                {
+                    DocumentRegistry.Initialize(TemplatesRoot);
+                }
+                catch (Exception ex)
+                {
+                    XSupport.Warning("Generator documente HR: Nu s-a putut incarca folderul Templates.\n" + ex.Message);
+                    ReleaseMutex();
+                    return base.ExecCommand(Cmd);
+                }
+
+                // ── Incarca toti angajatii activi din ERP ──────────
+                var persoane = PersonPickerDialog.LoadFromErp(XSupport);
+
+                // ── Date angajat curent ────────────────────────────
+                var cimData = ErpDataProvider.GetCimData(currentPrsn.PrsnId, XSupport);
+                var companyData = ErpDataProvider.GetCompanyData(XSupport);
+
+                // ── BulkContext pentru acces din forme ─────────────
                 BulkContext.XSupport = XSupport;
+                BulkContext.CompanyData = companyData;
+
+                // ── Porneste thread STA ────────────────────────────
                 var thread = new Thread(() =>
                 {
                     try
                     {
-                        // ── Selector tip document (picker angajat integrat in header) ──
-                        DocumentSelection selection;
-                        using (var selector = new SelectorDialog(angajati, prsn.PrsnId))
-                        {
-                            _activeForm = selector;
-                            if (selector.ShowDialog() != DialogResult.OK) return;
-                            selection = selector.Selection;
-
-                            // Daca s-a schimbat angajatul in picker din header
-                            if (selector.SelectedPrsnId > 0 && selector.SelectedPrsnId != prsn.PrsnId)
-                            {
-                                prsn = new PrsnInfo
-                                {
-                                    PrsnId = selector.SelectedPrsnId,
-                                    NumeSalariat = selector.SelectedName,
-                                    CNP = selector.SelectedCNP,
-                                    Functie = selector.SelectedFunctie
-                                };
-                                cimData = ErpDataProvider.GetCimData(prsn.PrsnId, XSupport);
-                                adresaPrimitor = ReadAdresaPrimitor(prsn.PrsnId, companyId);
-                            }
-                            _activeForm = null;
-                        }
-
-                        bool reopen = true;
-                        while (reopen)
-                        {
-                            reopen = false;
-                            using (var form = CreateForm(selection, prsn, cimData, officialName, companyData, adresaPrimitor))
-                            {
-                                if (form == null) break;
-                                SetFormIcon(form);
-                                _activeForm = form;
-                                var result = form.ShowDialog();
-                                _activeForm = null;
-
-                                if (result == DialogResult.Cancel || result == DialogResult.OK)
-                                {
-                                    using (var selector2 = new SelectorDialog(angajati, prsn.PrsnId))
-                                    {
-                                        _activeForm = selector2;
-                                        if (selector2.ShowDialog() != DialogResult.OK)
-                                        {
-                                            _activeForm = null;
-                                            break;
-                                        }
-                                        selection = selector2.Selection;
-                                        reopen = true;
-                                        _activeForm = null;
-                                    }
-                                }
-                            }
-                        }
+                        RunLoop(currentPrsn, cimData, companyData, persoane);
                     }
                     catch (Exception ex)
                     {
-                        MessageBox.Show("Eroare:\n" + ex.Message, "Generator documente HR",
+                        MessageBox.Show("Eroare:\n" + ex.Message,
+                            "Generator Documente HR",
                             MessageBoxButtons.OK, MessageBoxIcon.Error);
                     }
                     finally
                     {
-                        DocumentFormBase.OnDocumentGenerated = null;
                         _activeForm = null;
                         BulkContext.Reset();
-                        if (_mutex != null)
-                        {
-                            try { _mutex.ReleaseMutex(); } catch { }
-                            _mutex.Dispose();
-                            _mutex = null;
-                        }
+                        ReleaseMutex();
                     }
                 });
 
@@ -165,471 +349,167 @@ namespace ActAditionalPlugin
             catch (Exception ex)
             {
                 XSupport.Warning("Generator documente HR error: " + ex.Message);
+                ReleaseMutex();
             }
 
             return base.ExecCommand(Cmd);
         }
 
-        // ── Factory unificat ──────────────────────────────────
-        // Creeaza form-ul corect in functie de tipul selectiei (Doc sau PV).
-        private Form CreateForm(DocumentSelection selection, PrsnInfo prsn,
-            ErpCimData cimData, string officialName, ErpCompanyData companyData, string adresaPrimitor)
+        // ══════════════════════════════════════════════════════
+        //  CMD 4000502 — vezi clasa ProgramGeneral [WorksOn("GENERAL")]
+        //  mai jos in acest fisier. Acel cmd nu mai este gestionat
+        //  aici, ca sa nu depinda de ecranul PRSNIN.
+        // ══════════════════════════════════════════════════════
+
+        private void ReleaseMutex()
         {
-            var docSel = selection as DocSelection;
-            if (docSel != null)
+            if (_mutex != null)
             {
-                var model = CreateDocModel(docSel.Tip, prsn, cimData, officialName, companyData);
-                return CreateDocForm(docSel.Tip, model);
-            }
-
-            var pvSel = selection as PvSelection;
-            if (pvSel != null)
-            {
-                var model = CreatePvModel(pvSel.Tip, prsn, companyData, adresaPrimitor);
-                return CreatePvForm(pvSel.Tip, model, AddPvToDatagrid);
-            }
-
-            return null;
-        }
-
-        // ── Fabrica modele Doc ────────────────────────────────
-        private static DocumentModelBase CreateDocModel(TipDocument tip, PrsnInfo prsn,
-            ErpCimData cimData, string officialName, ErpCompanyData companyData)
-        {
-            DocumentModelBase m;
-            switch (tip)
-            {
-                case TipDocument.ActAditional: m = new ActAditionalModel(); break;
-                case TipDocument.SuspendareCresterecopil: m = new SuspendareCresterecopilModel(); break;
-                case TipDocument.SuspendareCresterecopilHandicap: m = new SuspendareCresterecopilHandicapModel(); break;
-                case TipDocument.SuspendareAbsenteNemotivate: m = new SuspendareAbsenteNemotivateModel(); break;
-                case TipDocument.SuspendareAcordParti: m = new SuspendareAcordPartiModel(); break;
-                case TipDocument.SuspendareSiIncetareSuspendare: m = new SuspendareSiIncetareSuspendareModel(); break;
-                case TipDocument.IncetareSuspendare: m = new IncetareSuspendareModel(); break;
-                case TipDocument.IncetareDemisie: m = new IncetareDemisieModel(); break;
-                case TipDocument.IncetareExpirare: m = new IncetareExpirareModel(); break;
-                case TipDocument.IncetareDisciplinar: m = new IncetareDisciplinarModel(); break;
-                case TipDocument.IncetarePerioadaProba: m = new IncetarePerioadaProbaModel(); break;
-                case TipDocument.ReferatDisciplinar: m = new ReferatDisciplinarModel(); break;
-                case TipDocument.AvertismentDisciplinar: m = new AvertismentDisciplinarModel(); break;
-                case TipDocument.DecizieConstituireComisie: m = new DecizieConstituireComisieModel(); break;
-                case TipDocument.ConvocareCercetare: m = new ConvocareCercetareModel(); break;
-                case TipDocument.ProcesVerbalCercetare: m = new ProcesVerbalCercetareModel(); break;
-                default: m = new ActAditionalModel(); break;
-            }
-
-            m.PrsnId = prsn.PrsnId;
-            m.NumeSalariat = prsn.NumeSalariat;
-            m.CNP = prsn.CNP;
-            m.Functie = prsn.Functie;
-            m.NrCim = cimData.NrCim;
-            m.DataCim = cimData.DataCim;
-            m.NumeDepartament = cimData.NumeDepartament;
-            ApplyCompanyData(m, companyData);
-
-            var convocare = m as ConvocareCercetareModel;
-            if (convocare != null)
-                convocare.CodCor = cimData.CodCor;
-
-            var absente = m as SuspendareAbsenteNemotivateModel;
-            if (absente != null && string.IsNullOrWhiteSpace(absente.IntocmitDe))
-                absente.IntocmitDe = officialName;
-
-            var disciplinar = m as IncetareDisciplinarModel;
-            if (disciplinar != null && string.IsNullOrWhiteSpace(disciplinar.NumeIntocmit))
-                disciplinar.NumeIntocmit = officialName;
-            m.CodInregistrare = RegistraturaService.Instance.CalculateCod(
-            RegistraturaService.Instance.GetLoginDate());
-            return m;
-        }
-
-        // ── Fabrica formulare Doc ─────────────────────────────
-        private static Form CreateDocForm(TipDocument tip, DocumentModelBase model)
-        {
-            switch (tip)
-            {
-                case TipDocument.ActAditional: return new ActAditionalForm((ActAditionalModel)model);
-                case TipDocument.SuspendareCresterecopil: return new SuspendareCresterecopilForm((SuspendareCresterecopilModel)model);
-                case TipDocument.SuspendareCresterecopilHandicap: return new SuspendareCresterecopilHandicapForm((SuspendareCresterecopilHandicapModel)model);
-                case TipDocument.SuspendareAbsenteNemotivate: return new SuspendareAbsenteForm((SuspendareAbsenteNemotivateModel)model);
-                case TipDocument.SuspendareAcordParti: return new SuspendareAcordPartiForm((SuspendareAcordPartiModel)model);
-                case TipDocument.SuspendareSiIncetareSuspendare: return new SuspendareSiIncetareSuspendareForm((SuspendareSiIncetareSuspendareModel)model);
-                case TipDocument.IncetareSuspendare: return new IncetareSuspendareForm((IncetareSuspendareModel)model);
-                case TipDocument.IncetareDemisie: return new IncetareDemisieForm((IncetareDemisieModel)model);
-                case TipDocument.IncetareExpirare: return new IncetareExpirareForm((IncetareExpirareModel)model);
-                case TipDocument.IncetareDisciplinar: return new IncetareDisciplinarForm((IncetareDisciplinarModel)model);
-                case TipDocument.IncetarePerioadaProba: return new IncetarePerioadaProbaForm((IncetarePerioadaProbaModel)model);
-                case TipDocument.ReferatDisciplinar: return new ReferatDisciplinarForm((ReferatDisciplinarModel)model);
-                case TipDocument.AvertismentDisciplinar: return new AvertismentDisciplinarForm((AvertismentDisciplinarModel)model);
-                case TipDocument.DecizieConstituireComisie: return new DecizieConstituireComisieForm((DecizieConstituireComisieModel)model);
-                case TipDocument.ConvocareCercetare: return new ConvocareCercetareForm((ConvocareCercetareModel)model);
-                case TipDocument.ProcesVerbalCercetare: return new ProcesVerbalCercetareForm((ProcesVerbalCercetareModel)model);
-                default: return null;
+                try { _mutex.ReleaseMutex(); } catch { }
+                _mutex.Dispose();
+                _mutex = null;
             }
         }
 
-        // ── Fabrica modele PV ─────────────────────────────────
-        private static PvModelBase CreatePvModel(TipPV tip, PrsnInfo prsn,
-            ErpCompanyData companyData, string adresaPrimitor)
+        // ══════════════════════════════════════════════════════
+        //  LOOP PRINCIPAL
+        //  SelectorDialog → DynamicForm → revenire la Selector
+        // ══════════════════════════════════════════════════════
+        private void RunLoop(
+            PrsnSnapshot currentPrsn,
+            ErpCimData cimData,
+            ErpCompanyData companyData,
+            List<PersonInfo> persoane)
         {
-            PvModelBase m;
-            switch (tip)
+            int currentPrsnId = currentPrsn?.PrsnId ?? 0;
+
+            while (true)
             {
-                case TipPV.Electronice: m = new PvElecroniceModel(); break;
-                case TipPV.Autovehicul: m = new PvAutovehiculModel(); break;
-                default: m = new PvEchipamenteModel(); break;
-            }
+                // ── Selector: alege angajat + tip document ─────────
+                DocumentDefinition selectedDoc;
+                PersonInfo selectedPerson;
 
-            m.PrsnId = prsn.PrsnId;
-            m.NumeSalariat = prsn.NumeSalariat;
-            m.CNP = prsn.CNP;
-            m.Functie = prsn.Functie;
-            ApplyCompanyData(m, companyData);
-
-            var auto = m as PvAutovehiculModel;
-            if (auto != null && !string.IsNullOrWhiteSpace(adresaPrimitor))
-                auto.Domiciliu = adresaPrimitor;
-            m.CodInregistrare = RegistraturaService.Instance.CalculateCod(
-            RegistraturaService.Instance.GetLoginDate());
-            return m;
-        }
-
-        // ── Fabrica formulare PV ──────────────────────────────
-        private static Form CreatePvForm(TipPV tip, PvModelBase model, Action<PvModelBase> onPdfGenerated)
-        {
-            switch (tip)
-            {
-                case TipPV.Echipamente:
-                    return new PvBunuriForm((PvEchipamenteModel)model,
-                        "Proces Verbal — Echipamente de lucru / Uniformă", "BUNURI PREDATE", onPdfGenerated);
-                case TipPV.Electronice:
-                    return new PvBunuriForm((PvElecroniceModel)model,
-                        "Proces Verbal — Echipamente Electronice", "ECHIPAMENTE PREDATE", onPdfGenerated);
-                case TipPV.Autovehicul:
-                    return new PvAutovehiculForm((PvAutovehiculModel)model, onPdfGenerated);
-                default:
-                    return null;
-            }
-        }
-
-        // ── Helpers citire date ERP ───────────────────────────
-        private List<UI.AngajatPickerDialog.AngajatItem> LoadHiredEmployees(int companyId)
-        {
-            var result = new List<UI.AngajatPickerDialog.AngajatItem>();
-            try
-            {
-                // Angajati cu pozitie activa (JOBPOSITION != 0) — logica IsPrsnHired
-                string sql = string.Format(
-                    "SELECT DISTINCT P.PRSN, RTRIM(P.NAME) + ' ' + ISNULL(RTRIM(P.NAME2), '') AS NUMECOMPLET," +
-                    " ISNULL(P.AFM, '') AS CNP," +
-                    " ISNULL(P.SOTITLENAME, '') AS FUNCTIE" +
-                    " FROM PRSN P" +
-                    " INNER JOIN PRSJOBPOS J ON J.PRSN = P.PRSN AND J.COMPANY = {0}" +
-                    " WHERE J.JOBPOSITION IS NOT NULL AND J.JOBPOSITION <> 0" +
-                    " ORDER BY NUMECOMPLET", companyId);
-
-                var ds = XSupport.GetSQLDataSet(sql);
-                if (ds != null)
+                using (var selector = new SelectorDialog(persoane, currentPrsnId))
                 {
-                    for (int i = 0; i < ds.Count; i++)
+                    // Pre-selecteaza angajatul curent (daca exista)
+                    _activeForm = selector;
+                    if (selector.ShowDialog() != DialogResult.OK)
                     {
-                        int id = 0;
-                        int.TryParse(ds[i, "PRSN"]?.ToString() ?? string.Empty, out id);
-                        if (id == 0) continue;
-                        result.Add(new UI.AngajatPickerDialog.AngajatItem
-                        {
-                            PrsnId = id,
-                            Name = (ds[i, "NUMECOMPLET"]?.ToString() ?? string.Empty).Trim().ToUpper(),
-                            CNP = ds[i, "CNP"]?.ToString() ?? string.Empty,
-                            Functie = ds[i, "FUNCTIE"]?.ToString() ?? string.Empty
-                        });
+                        _activeForm = null;
+                        return;
                     }
+
+                    selectedDoc = selector.SelectedDocument;
+                    selectedPerson = selector.SelectedPerson;
+                    _activeForm = null;
                 }
+
+                if (selectedPerson == null)
+                {
+                    XSupport.Warning("Selectează un angajat pentru a continua.");
+                    continue;
+                }
+
+                // Reincarca datele CIM daca angajatul s-a schimbat fata de
+                // ce aveam deja incarcat (sau daca nu aveam nimic incarcat)
+                if (cimData == null || selectedPerson.PrsnId != currentPrsnId)
+                {
+                    cimData = ErpDataProvider.GetCimData(selectedPerson.PrsnId, BulkContext.XSupport);
+                    currentPrsnId = selectedPerson.PrsnId;
+                }
+
+                PersonInfo personForDoc = selectedPerson;
+
+                // ── Construieste CommonDocumentValues ──────────────
+                var common = CommonDocumentValues.FromErp(
+                    personForDoc.PrsnId,
+                    personForDoc.NumeComplet,
+                    personForDoc.CNP,
+                    personForDoc.Functie,
+                    cimData,
+                    companyData);
+
+                // Calculeaza cod inregistrare
+                common.CodInregistrare = RegistraturaService.Instance.CalculateCod(
+                    RegistraturaService.Instance.GetLoginDate());
+
+                // ── Deschide DynamicForm ───────────────────────────
+                using (var form = new DynamicForm(selectedDoc, common, persoane))
+                {
+                    SetFormIcon(form);
+                    _activeForm = form;
+                    form.ShowDialog();
+                    _activeForm = null;
+                }
+
+                // Dupa inchiderea formularului, bucla reporneste → SelectorDialog
             }
-            catch { }
-            return result;
         }
 
-        private PrsnInfo TryReadPrsn(int companyId)
-        {
-            var prsnTbl = XModule.GetTable("PRSN");
-            if (prsnTbl == null || prsnTbl.Current == null) return null;
-
-            int prsnId = 0;
-            int.TryParse(prsnTbl.Current["PRSN"]?.ToString() ?? string.Empty, out prsnId);
-            if (prsnId == 0) return null;
-
-            string namePart = prsnTbl.Current["NAME"]?.ToString() ?? string.Empty;
-            string name2Part = prsnTbl.Current["NAME2"]?.ToString() ?? string.Empty;
-            string numeSalariat = string.Format("{0} {1}", namePart, name2Part).Trim().ToUpper();
-            if (string.IsNullOrWhiteSpace(numeSalariat)) return null;
-
-            string cnp = prsnTbl.Current["AFM"]?.ToString() ?? string.Empty;
-
-            string functie = string.Empty;
-            try
-            {
-                var ds = XSupport.GetSQLDataSet(
-                    "SELECT P.SOTITLENAME FROM PRSN P WHERE P.PRSN = " + prsnId + " AND P.COMPANY = " + companyId);
-                if (ds != null && ds.Count > 0)
-                    functie = ds[0, "SOTITLENAME"]?.ToString()?.Trim() ?? string.Empty;
-            }
-            catch { }
-
-            return new PrsnInfo { PrsnId = prsnId, NumeSalariat = numeSalariat, CNP = cnp, Functie = functie };
-        }
-
-        private string ReadOfficialName()
+        // ══════════════════════════════════════════════════════
+        //  HELPERS
+        // ══════════════════════════════════════════════════════
+        private PrsnSnapshot TryReadCurrentPrsn(int companyId)
         {
             try
             {
-                int userId = XSupport.ConnectionInfo.UserId;
-                var ds = XSupport.GetSQLDataSet("SELECT NAME FROM USERS WHERE USERS.USERS = " + userId);
-                if (ds != null && ds.Count > 0)
-                    return ds[0, "NAME"]?.ToString() ?? string.Empty;
-            }
-            catch { }
-            return string.Empty;
-        }
+                var prsnTbl = XModule.GetTable("PRSN");
+                if (prsnTbl == null || prsnTbl.Current == null) return null;
 
-        private string ReadAdresaPrimitor(int prsnId, int companyId)
-        {
-            try
-            {
-                var ds = XSupport.GetSQLDataSet(
-                    "SELECT P.ADDRESS FROM PRSN P WHERE P.PRSN = " + prsnId + " AND P.COMPANY = " + companyId);
-                if (ds != null && ds.Count > 0)
-                    return ds[0, "ADDRESS"]?.ToString()?.Trim() ?? string.Empty;
+                int prsnId = 0;
+                int.TryParse(prsnTbl.Current["PRSN"]?.ToString() ?? string.Empty, out prsnId);
+                if (prsnId == 0) return null;
+
+                string name = prsnTbl.Current["NAME"]?.ToString() ?? string.Empty;
+                string name2 = prsnTbl.Current["NAME2"]?.ToString() ?? string.Empty;
+                string numeSalariat = string.Format("{0} {1}", name, name2).Trim().ToUpper();
+                if (string.IsNullOrWhiteSpace(numeSalariat)) return null;
+
+                string cnp = prsnTbl.Current["AFM"]?.ToString() ?? string.Empty;
+
+                string functie = string.Empty;
+                try
+                {
+                    var ds = XSupport.GetSQLDataSet(
+                        "SELECT SOTITLENAME FROM PRSN WHERE PRSN = " + prsnId +
+                        " AND COMPANY = " + companyId);
+                    if (ds != null && ds.Count > 0)
+                        functie = ds[0, "SOTITLENAME"]?.ToString()?.Trim() ?? string.Empty;
+                }
+                catch { }
+
+                return new PrsnSnapshot
+                {
+                    PrsnId = prsnId,
+                    NumeSalariat = numeSalariat,
+                    CNP = cnp,
+                    Functie = functie
+                };
             }
-            catch { }
-            return string.Empty;
+            catch { return null; }
         }
 
         private static void SetFormIcon(Form form)
         {
             try
             {
-                string icoPath = System.IO.Path.Combine(
-                    System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location),
+                string icoPath = Path.Combine(
+                    Path.GetDirectoryName(
+                        System.Reflection.Assembly.GetExecutingAssembly().Location),
                     "Resources", "softone.ico");
-                if (System.IO.File.Exists(icoPath))
+                if (File.Exists(icoPath))
                     form.Icon = new System.Drawing.Icon(icoPath);
             }
             catch { }
         }
 
-        // ── ApplyCompanyData (overload Doc + PV) ─────────────
-        private static void ApplyCompanyData(DocumentModelBase m, ErpCompanyData data)
+        // ── DTO minimal pentru angajatul curent din ecran ──────
+        private class PrsnSnapshot
         {
-            bool useErp = data != null && !string.IsNullOrWhiteSpace(data.NumeAngajator);
-            m.NumeAngajator = useErp ? data.NumeAngajator : PluginConfig.NumeAngajator;
-            m.CIFAngajator = useErp ? data.CIFAngajator : PluginConfig.CIFAngajator;
-            m.ReprezentantLegal = useErp ? data.ReprezentantLegal : PluginConfig.ReprezentantLegal;
-            m.FunctieReprezentant = useErp ? data.FunctieReprezentant : PluginConfig.FunctieReprezentant;
-            m.AdresaCompanie = useErp ? data.AdresaCompanie : PluginConfig.AdresaCompanie;
-            m.ZipCompanie = useErp ? data.ZipCompanie : PluginConfig.ZipCompanie;
-            m.NrRegComertului = useErp ? data.NrRegComertului : PluginConfig.NrRegComertului;
-            m.IbanCompanie = useErp ? data.IbanCompanie : PluginConfig.IbanCompanie;
-            m.NrTelefonCompanie = useErp ? data.NrTelefonCompanie : PluginConfig.NrTelefonCompanie;
-            m.EmailCompanie = useErp ? data.EmailCompanie : PluginConfig.EmailCompanie;
-            m.WebsiteCompanie = useErp ? data.WebsiteCompanie : PluginConfig.WebsiteCompanie;
-        }
-
-        private static void ApplyCompanyData(PvModelBase m, ErpCompanyData data)
-        {
-            bool useErp = data != null && !string.IsNullOrWhiteSpace(data.NumeAngajator);
-            m.NumeAngajator = useErp ? data.NumeAngajator : PluginConfig.NumeAngajator;
-            m.CIFAngajator = useErp ? data.CIFAngajator : PluginConfig.CIFAngajator;
-            m.ReprezentantLegal = useErp ? data.ReprezentantLegal : PluginConfig.ReprezentantLegal;
-            m.FunctieReprezentant = useErp ? data.FunctieReprezentant : PluginConfig.FunctieReprezentant;
-            m.AdresaCompanie = useErp ? data.AdresaCompanie : PluginConfig.AdresaCompanie;
-            m.ZipCompanie = useErp ? data.ZipCompanie : PluginConfig.ZipCompanie;
-            m.NrRegComertului = useErp ? data.NrRegComertului : PluginConfig.NrRegComertului;
-            m.IbanCompanie = useErp ? data.IbanCompanie : PluginConfig.IbanCompanie;
-            m.NrTelefonCompanie = useErp ? data.NrTelefonCompanie : PluginConfig.NrTelefonCompanie;
-            m.EmailCompanie = useErp ? data.EmailCompanie : PluginConfig.EmailCompanie;
-            m.WebsiteCompanie = useErp ? data.WebsiteCompanie : PluginConfig.WebsiteCompanie;
-        }
-
-        // ── Inserare datagrid ─────────────────────────────────
-        private void AddPvToDatagrid(PvModelBase model)
-        {
-            if (model == null) return;
-            try
-            {
-                var pvTable = XModule.GetTable("CCCPVEMISE");
-                int companyId = XSupport.ConnectionInfo.CompanyId;
-                if (pvTable == null || pvTable.Current == null) return;
-                pvTable.Current.Append();
-                pvTable.Current["PRSN"] = model.PrsnId;
-                pvTable.Current["CCCTRNDATE"] = DateTime.Now;
-                pvTable.Current["CODINREGISTRARE"] = model.CodInregistrare;
-                pvTable.Current["CCCPVTYPE"] = GetPvTypeCode(model.TipPV);
-                pvTable.Current["CCCPVNAME"] = GetPvObservatii(model);
-                pvTable.Current["CCCPVNUMBER"] = GetPvNumber(model.CodInregistrare);
-                pvTable.Current.Post();
-                this.XModule.Exec("Button:Save");
-            }
-            catch (Exception ex)
-            {
-                XSupport.Warning("Nu s-a putut adauga PV in istoric (CCCPVEMISE): " + ex.Message);
-            }
-        }
-
-        private void AddDocumentToDatagrid(DocumentModelBase model)
-        {
-            if (model == null) return;
-            try
-            {
-                if (model is ActAditionalModel)
-                    AddActAditionalToDatagrid((ActAditionalModel)model);
-                else if (model is DecizieModelBase)
-                    AddDecizieToDatagrid((DecizieModelBase)model);
-            }
-            catch (Exception ex)
-            {
-                XSupport.Warning("Nu s-a putut adauga documentul in istoric: " + ex.Message);
-            }
-        }
-
-        private void AddActAditionalToDatagrid(ActAditionalModel model)
-        {
-            try
-            {
-                var tbl = XModule.GetTable("CCCACTEADITIONALE");
-                if (tbl == null || tbl.Current == null) return;
-
-                int companyId = XSupport.ConnectionInfo.CompanyId;
-                tbl.Current.Append();
-                SafeSetField(tbl, "COMPANY", companyId);
-                SafeSetField(tbl, "PRSN", model.PrsnId);
-                SafeSetField(tbl, "CCCCODINREG", model.CodInregistrare);
-                SafeSetField(tbl, "CCCNRINREG", GetPvNumber(model.CodInregistrare));
-                SafeSetField(tbl, "CCCIDCONTRACT", ParseInt(model.NrCim));
-                SafeSetField(tbl, "CCCDATAINREG", GetSoftoneLoginDate());
-                if (model.DataVigoare != DateTime.MinValue)
-                    SafeSetField(tbl, "CCCDATAVIGOARE", model.DataVigoare);
-                SafeSetField(tbl, "CCCDOCUMENTSTATUS", 1);
-                if (!string.IsNullOrWhiteSpace(model.MentiuniDocument))
-                    SafeSetField(tbl, "CCCACTOBS", model.MentiuniDocument);
-                tbl.Current.Post();
-                this.XModule.Exec("Button:Save");
-            }
-            catch (Exception ex)
-            {
-                XSupport.Warning("Istoric act aditional indisponibil (CCCACTEADITIONALE): " + ex.Message);
-            }
-        }
-
-        private void AddDecizieToDatagrid(DecizieModelBase model)
-        {
-            try
-            {
-                var tbl = XModule.GetTable("CCCDCZCONTRACT");
-                if (tbl == null || tbl.Current == null) return;
-
-                int companyId = XSupport.ConnectionInfo.CompanyId;
-                tbl.Current.Append();
-                SafeSetField(tbl, "COMPANY", companyId);
-                SafeSetField(tbl, "PRSN", model.PrsnId);
-                SafeSetField(tbl, "CCCCODINREG", model.CodInregistrare);
-                SafeSetField(tbl, "CCCNRINREG", GetPvNumber(model.CodInregistrare));
-                SafeSetField(tbl, "CCCIDCONTRACT", ParseInt(model.NrCim));
-                SafeSetField(tbl, "CCCDATAINREG", GetSoftoneLoginDate());
-                if (model.DataDecizie != DateTime.MinValue)
-                    SafeSetField(tbl, "CCCDATAVIGOARE", model.DataDecizie);
-                SafeSetField(tbl, "LINENUM", 1);
-                SafeSetField(tbl, "CCCSTATUS", 1);
-                SafeSetField(tbl, "CCCTIPDCZ", GetDecizieTipText(model.TipDocument));
-                if (!string.IsNullOrWhiteSpace(model.MentiuniDocument))
-                    SafeSetField(tbl, "CCCREMARKS", model.MentiuniDocument);
-                tbl.Current.Post();
-                this.XModule.Exec("Button:Save");
-            }
-            catch (Exception ex)
-            {
-                XSupport.Warning("Istoric decizie indisponibil (CCCDCZCONTRACT): " + ex.Message);
-            }
-        }
-
-        // ── Utilitare ─────────────────────────────────────────
-        private static void SafeSetField(dynamic table, string fieldName, object value)
-        {
-            try { if (value != null) table.Current[fieldName] = value; }
-            catch { }
-        }
-
-        private DateTime GetSoftoneLoginDate()
-        {
-            try
-            {
-                var ci = XSupport.ConnectionInfo;
-                var prop = ci.GetType().GetProperty("LoginDate");
-                if (prop != null)
-                {
-                    object val = prop.GetValue(ci, null);
-                    if (val is DateTime)
-                        return ((DateTime)val).Date;
-                }
-            }
-            catch { }
-            return DateTime.Today;
-        }
-
-        private static int ParseInt(string value)
-        {
-            int parsed;
-            return int.TryParse(value, out parsed) ? parsed : 0;
-        }
-
-        private static int GetPvTypeCode(TipPV tip)
-        {
-            switch (tip)
-            {
-                case TipPV.Echipamente: return 1;
-                case TipPV.Autovehicul: return 2;
-                case TipPV.Electronice: return 6;
-                default: return 0;
-            }
-        }
-
-        private static int GetPvNumber(string codInregistrare)
-        {
-            if (string.IsNullOrWhiteSpace(codInregistrare)) return 0;
-            int slashIndex = codInregistrare.LastIndexOf('/');
-            if (slashIndex >= 0 && slashIndex + 1 < codInregistrare.Length)
-            {
-                int nr;
-                if (int.TryParse(codInregistrare.Substring(slashIndex + 1), out nr))
-                    return nr;
-            }
-            int fallback;
-            return int.TryParse(codInregistrare, out fallback) ? fallback : 0;
-        }
-
-        private static string GetPvObservatii(PvModelBase model)
-        {
-            return !string.IsNullOrWhiteSpace(model.MentiuniDocument)
-                ? model.MentiuniDocument.Trim()
-                : "-";
-        }
-
-        private static string GetDecizieTipText(TipDocument tip)
-        {
-            switch (tip)
-            {
-                case TipDocument.SuspendareCresterecopil: return "Crestere copil";
-                case TipDocument.SuspendareCresterecopilHandicap: return "Crestere copil handicap";
-                case TipDocument.SuspendareAbsenteNemotivate: return "Absente nemotivate";
-                case TipDocument.SuspendareAcordParti: return "Acordul partilor";
-                case TipDocument.SuspendareSiIncetareSuspendare: return "Suspendare + Incetare";
-                case TipDocument.IncetareSuspendare: return "Incetare suspendare";
-                case TipDocument.IncetareDemisie: return "Incetare demisie";
-                case TipDocument.IncetareExpirare: return "Expirare termen";
-                case TipDocument.IncetareDisciplinar: return "Concediere disciplinara";
-                case TipDocument.IncetarePerioadaProba: return "Incetare perioada proba";
-                default: return tip.ToString();
-            }
+            public int PrsnId { get; set; }
+            public string NumeSalariat { get; set; }
+            public string CNP { get; set; }
+            public string Functie { get; set; }
         }
     }
 }
