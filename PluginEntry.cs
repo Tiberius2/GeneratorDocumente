@@ -119,6 +119,7 @@ namespace ActAditionalPlugin
                     finally
                     {
                         _activeFormGeneral = null;
+                        WordHelper.ShutdownWordApp(); // pe acelasi thread STA care l-a creat
                         BulkContext.Reset();
                         ReleaseMutexGeneral();
                     }
@@ -337,6 +338,7 @@ namespace ActAditionalPlugin
                     finally
                     {
                         _activeForm = null;
+                        WordHelper.ShutdownWordApp(); // pe acelasi thread STA care l-a creat
                         BulkContext.Reset();
                         ReleaseMutex();
                     }

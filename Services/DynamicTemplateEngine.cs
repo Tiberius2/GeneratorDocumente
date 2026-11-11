@@ -131,13 +131,10 @@ namespace ActAditionalPlugin.Services
             {
                 var body = doc.MainDocumentPart.Document.Body;
 
-                // 1. Expandare liste dinamice (inainte de replace simplu)
+                // 1. Expandare liste dinamice + clauze_editor (inainte de replace simplu)
                 ExpandDynamicLists(body, def, formValues);
 
-                // 2. Expandare tabele (ex. ActAditional — ModificareNr)
-                ExpandTableRows(body, def, formValues);
-
-                // 2b. Hookuri on_generate cu acces la DocumentBody
+                // 2. Hookuri on_generate cu acces la DocumentBody
                 //     (ex: InjectArticoleFinal — numara Art.N si calculeaza articolele finale)
                 if (def.Hooks != null)
                 {
@@ -204,7 +201,10 @@ namespace ActAditionalPlugin.Services
                 if (!formValues.ContainsKey(field.Key)) continue;
 
                 var rows = formValues[field.Key] as List<Dictionary<string, string>>;
-                if (rows == null || rows.Count == 0) continue;
+                // Lista goala (niciun rand completat): expandarea cu 0 elemente
+                // elimina paragraful / randul-sablon, ca sa nu ramana {{Cheie}}
+                // ca text in PDF.
+                if (rows == null) continue;
 
                 if (field.Type == "clauze_editor")
                 {
@@ -237,12 +237,16 @@ namespace ActAditionalPlugin.Services
                         .ToList();
                     var allKeys = ownKeys.Union(mappedKeys).ToList();
 
+                    // {{NrCrt}} (numarul randului) se inlocuieste in clone, dar NU e
+                    // marker de expandare (altfel ar putea "fura" randul altei liste).
+                    var mapKeys = allKeys.Union(new[] { "NrCrt" }).ToList();
+
                     // Fiecare cheie (oficiala sau mapata) poate fi un placeholder
                     // expandabil, oriunde apare prima data in document.
                     foreach (var key in allKeys)
                     {
                         string marker = "{{" + key + "}}";
-                        ExpandParagraphOrRow(body, marker, rows, key, allKeys);
+                        ExpandParagraphOrRow(body, marker, rows, key, mapKeys);
                     }
                 }
             }
@@ -277,18 +281,60 @@ namespace ActAditionalPlugin.Services
             {
                 // Expandare la nivel de rand de tabel
                 var tableParent = parentRow.Parent;
+
+                // Randul-sablon poate face parte dintr-un grup de randuri unite vertical
+                // (celule vMerge): randul care le deschide ("restart") + randurile
+                // urmatoare care le continua. Ex. celula de data impartita in 3 randuri
+                // (An / Luna / Zi). Clonam tot grupul per item, nu doar primul rand.
+                var group = new List<TableRow> { parentRow };
+                if (HasVMergeRestart(parentRow))
+                {
+                    var sib = parentRow.NextSibling();
+                    while (sib != null)
+                    {
+                        var nextRow = sib as TableRow;
+                        if (nextRow == null || !HasVMergeContinueOnly(nextRow)) break;
+                        group.Add(nextRow);
+                        sib = sib.NextSibling();
+                    }
+                }
+
+                // Lista goala, iar grupul e tot tabelul: un tabel fara randuri e
+                // DOCX invalid -> pastram randul, doar golim valorile.
+                if (rows.Count == 0
+                    && !tableParent.Elements<TableRow>().Any(r => !group.Contains(r)))
+                {
+                    foreach (var g in group)
+                        ApplyRowMap(g, new Dictionary<string, string>(), allKeys);
+                    return;
+                }
+
                 foreach (var row in rows)
                 {
-                    var cloneRow = (TableRow)parentRow.CloneNode(true);
-                    ApplyRowMap(cloneRow, row, allKeys);
-                    tableParent.InsertBefore(cloneRow, parentRow);
+                    foreach (var g in group)
+                    {
+                        var cloneRow = (TableRow)g.CloneNode(true);
+                        ApplyRowMap(cloneRow, row, allKeys);
+                        tableParent.InsertBefore(cloneRow, parentRow);
+                    }
                 }
-                tableParent.RemoveChild(parentRow);
+                foreach (var g in group)
+                    tableParent.RemoveChild(g);
             }
             else
             {
                 // Expandare la nivel de paragraf
                 var parent = templatePara.Parent;
+
+                // Lista goala, iar paragraful e singurul dintr-o celula: celula
+                // trebuie sa contina un paragraf -> il pastram, doar golim valorile.
+                if (rows.Count == 0 && parent is TableCell
+                    && !parent.Elements<Paragraph>().Any(p => p != templatePara))
+                {
+                    ApplyParaMap(templatePara, new Dictionary<string, string>(), allKeys);
+                    return;
+                }
+
                 foreach (var row in rows)
                 {
                     var clone = (Paragraph)templatePara.CloneNode(true);
@@ -325,54 +371,6 @@ namespace ActAditionalPlugin.Services
         }
 
         // ══════════════════════════════════════════════════════
-        //  EXPANDARE TABELE (ex. ActAditional: {{ModificareNr}})
-        //  Tip special: expand_table_row cu table_marker in JSON
-        // ══════════════════════════════════════════════════════
-        private static void ExpandTableRows(
-            Body body,
-            DocumentDefinition def,
-            Dictionary<string, object> formValues)
-        {
-            var tableFields = def.Sections
-                .SelectMany(s => s.Fields)
-                .Where(f => f.Type == "expand_table_row"
-                         && !string.IsNullOrEmpty(f.TableMarker))
-                .ToList();
-
-            foreach (var field in tableFields)
-            {
-                if (!formValues.ContainsKey(field.Key)) continue;
-
-                var rows = formValues[field.Key] as List<Dictionary<string, string>>;
-                if (rows == null || rows.Count == 0) continue;
-
-                string marker = "{{" + field.TableMarker + "}}";
-
-                // Gaseste tabelul si randul template
-                var table = body.Descendants<Table>()
-                    .FirstOrDefault(t => WordHelper.GetText(t).Contains(marker));
-                if (table == null) continue;
-
-                var templateRow = table.Descendants<TableRow>()
-                    .FirstOrDefault(r => WordHelper.GetText(r).Contains(marker));
-                if (templateRow == null) continue;
-
-                var allKeys = field.ItemFields.Select(f2 => f2.Key).ToList();
-
-                for (int i = 0; i < rows.Count; i++)
-                {
-                    var cloneRow = (TableRow)templateRow.CloneNode(true);
-                    // Adaugam si indexul (Nr.) automat
-                    var rowData = new Dictionary<string, string>(rows[i]);
-                    rowData[field.TableMarker] = (i + 1).ToString();
-                    ApplyRowMap(cloneRow, rowData, new List<string> { field.TableMarker }.Concat(allKeys).ToList());
-                    table.InsertBefore(cloneRow, templateRow);
-                }
-                table.RemoveChild(templateRow);
-            }
-        }
-
-        // ══════════════════════════════════════════════════════
         //  BUILD PLACEHOLDER MAP
         //  Combina valorile comune (angajat + companie) cu
         //  valorile din formular intr-un singur dictionar.
@@ -396,6 +394,8 @@ namespace ActAditionalPlugin.Services
             map["{{NrCI}}"] = common.NrCI ?? string.Empty;
             map["{{Domiciliu}}"] = common.Domiciliu ?? string.Empty;
             map["{{CodInregistrare}}"] = common.CodInregistrare ?? string.Empty;
+            map["{{NumarTelefonSalariat}}"] = common.TelefonSalariat ?? string.Empty;
+            map["{{EmailSalariat}}"] = common.EmailSalariat ?? string.Empty;
 
             // ── Valori comune companie ─────────────────────────
             map["{{NumeAngajator}}"] = common.NumeAngajator ?? string.Empty;
@@ -433,6 +433,27 @@ namespace ActAditionalPlugin.Services
         // ══════════════════════════════════════════════════════
         //  HELPERS
         // ══════════════════════════════════════════════════════
+        // Randul deschide o unire verticala (cel putin o celula vMerge "restart")
+        private static bool HasVMergeRestart(TableRow row)
+        {
+            foreach (var vm in row.Descendants<VerticalMerge>())
+                if (vm.Val != null && vm.Val.Value == MergedCellValues.Restart) return true;
+            return false;
+        }
+
+        // Randul doar continua o unire verticala (are celule vMerge fara "restart"
+        // si nu deschide altele noi)
+        private static bool HasVMergeContinueOnly(TableRow row)
+        {
+            bool cont = false;
+            foreach (var vm in row.Descendants<VerticalMerge>())
+            {
+                if (vm.Val != null && vm.Val.Value == MergedCellValues.Restart) return false;
+                cont = true;
+            }
+            return cont;
+        }
+
         private static TableRow GetParentTableRow(OpenXmlElement element)
         {
             var current = element.Parent;
@@ -486,6 +507,8 @@ namespace ActAditionalPlugin.Services
         public string NrCI { get; set; }
         public string Domiciliu { get; set; }
         public string CodInregistrare { get; set; }
+        public string TelefonSalariat { get; set; }
+        public string EmailSalariat { get; set; }
 
         // ── Companie ──────────────────────────────────────────
         public string NumeAngajator { get; set; }
@@ -517,6 +540,8 @@ namespace ActAditionalPlugin.Services
             NrCI = string.Empty;
             Domiciliu = string.Empty;
             CodInregistrare = string.Empty;
+            TelefonSalariat = string.Empty;
+            EmailSalariat = string.Empty;
             NumeAngajator = string.Empty;
             CIFAngajator = string.Empty;
             ReprezentantLegal = string.Empty;
@@ -556,6 +581,8 @@ namespace ActAditionalPlugin.Services
                 SerieCI = cimData.SerieCI,
                 NrCI = cimData.NrCI,
                 Domiciliu = cimData.Domiciliu,
+                TelefonSalariat = cimData.Telefon,
+                EmailSalariat = cimData.Email,
                 NumeAngajator = companyData.NumeAngajator,
                 CIFAngajator = companyData.CIFAngajator,
                 ReprezentantLegal = companyData.ReprezentantLegal,

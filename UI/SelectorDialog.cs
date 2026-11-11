@@ -219,6 +219,17 @@ namespace ActAditionalPlugin.UI
             };
             pulseTimer.Start();
 
+            // Timer-ul nu e in components -> il oprim explicit la inchidere
+            // (altfel ramane activ dupa fiecare revenire la selector).
+            // In modul Dll Form (standalone) selectorul e ultima fereastra:
+            // inchidem si instanta Word folosita la conversia PDF.
+            FormClosed += (s, e) =>
+            {
+                pulseTimer.Stop();
+                pulseTimer.Dispose();
+                if (_standaloneMode) WordHelper.ShutdownWordApp();
+            };
+
             pnlHeader.Controls.Add(_btnAngajat);
 
             // Centreaza vertical butonul in header

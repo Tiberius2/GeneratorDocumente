@@ -141,8 +141,14 @@
     <Compile Include="UI\ConfirmareDialog.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="UI\ConfirmareStergereDialog.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="UI\DocumentTheme.cs" />
     <Compile Include="UI\DynamicForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="UI\ListItemDialog.cs">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="UI\PersonPickerDialog.cs">
@@ -194,8 +200,7 @@
   </Target>
   <Import Project="packages\Costura.Fody.6.0.0\build\Costura.Fody.targets" Condition="Exists('packages\Costura.Fody.6.0.0\build\Costura.Fody.targets')" />
   <PropertyGroup>
-    <PostBuildEvent>copy /Y "$(TargetPath)" "C:\Program Files (x86)\Soft1\Soft1 - Ice\$(TargetFileName)"
-copy /Y "$(TargetPath).config" "C:\Program Files (x86)\Soft1\Soft1 - Ice\$(TargetFileName).config"
-exit 0</PostBuildEvent>
+    <PostBuildEvent>
+    </PostBuildEvent>
   </PropertyGroup>
 </Project>
