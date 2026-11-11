@@ -60,6 +60,23 @@ namespace ActAditionalPlugin.Services
             return string.Format("{0}/{1}", prefix, nr);
         }
 
+        // ── Verifica daca un cod e deja folosit ──────────────
+        // Apelat chiar inainte de inregistrare. Erorile SQL NU sunt
+        // inghitite: fara verificare nu inregistram (risc de duplicat).
+        public bool CodExista(string codInreg)
+        {
+            string sql = string.Format(
+                "SELECT COUNT(*) AS NR FROM CCCVREGISTRATURA " +
+                "WHERE COMPANY={0} AND CODINREG='{1}'",
+                _company, (codInreg ?? string.Empty).Replace("'", "''"));
+
+            var ds = _xs.GetSQLDataSet(sql);
+            if (ds == null || ds.Count == 0) return false;
+            int nr;
+            int.TryParse(ds[0, "NR"]?.ToString() ?? "0", out nr);
+            return nr > 0;
+        }
+
         // ── INSERT via ExecuteSQL ─────────────────────────
         public void Inregistreaza(string codInreg, DateTime dataInreg,
             int tipDocPK, string titluDoc, int prsnId)

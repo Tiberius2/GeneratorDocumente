@@ -191,7 +191,17 @@ namespace ActAditionalPlugin.Services
             lock (_wordLock)
             {
                 if (_wordApp == null) return;
-                try { _wordType.InvokeMember("Quit", BindingFlags.InvokeMethod, null, _wordApp, null); }
+                try
+                {
+                    // Inchidem Word doar daca nu are documente deschise (instanta e
+                    // a noastra si invizibila, dar nu riscam sa inchidem ceva al userului)
+                    object documents = _wordType.InvokeMember("Documents", BindingFlags.GetProperty, null, _wordApp, null);
+                    int count = Convert.ToInt32(documents.GetType().InvokeMember("Count", BindingFlags.GetProperty, null, documents, null));
+                    if (count == 0)
+                        _wordType.InvokeMember("Quit", BindingFlags.InvokeMethod, null, _wordApp, null);
+                }
+                catch { }
+                try { System.Runtime.InteropServices.Marshal.FinalReleaseComObject(_wordApp); }
                 catch { }
                 _wordApp = null;
                 _wordType = null;

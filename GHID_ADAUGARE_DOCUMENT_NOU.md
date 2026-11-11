@@ -148,11 +148,9 @@ Salvează fișierul cu encoding **UTF-8** (nu UTF-8 BOM).
 | `default` | string | — | Valoarea pre-completată la deschiderea formularului |
 | `placeholder` | string | — | Text hint gri afișat în câmp când e gol |
 | `options` | array | — | Lista de opțiuni pentru tip `combo` |
-| `options_sql` | string | — | SQL pentru popularea unui `combo` din baza de date (neimplementat momentan) |
 | `maps` | object | — | Pentru `person_picker`: mapare câmpuri de autocompletat după selectarea persoanei |
 | `initial_rows` | int | — | Pentru `dynamic_list`: numărul de rânduri inițiale (default 1) |
 | `item_fields` | array | — | Pentru `dynamic_list`: definițiile câmpurilor din fiecare rând |
-| `table_marker` | string | — | Pentru `expand_table_row`: numele markerului din tabelul DOCX |
 
 ### Câmp item din dynamic_list (`item_fields[]`)
 
@@ -276,9 +274,6 @@ Engine-ul clonează acel paragraf/rând pentru fiecare item din listă.
 
 ### `clauze_editor`
 Specific Actelor Adiționale. Nu se folosește în documente noi din alte categorii.
-
-### `expand_table_row`
-Expandare rând dintr-un tabel existent, identificat prin `table_marker`. Folosit în Acte Adiționale.
 
 ---
 

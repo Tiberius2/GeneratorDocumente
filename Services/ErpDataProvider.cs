@@ -13,6 +13,8 @@ namespace ActAditionalPlugin.Services
         public string SerieCI { get; set; }
         public string NrCI { get; set; }
         public string Domiciliu { get; set; }
+        public string Telefon { get; set; }
+        public string Email { get; set; }
 
         public ErpCimData()
         {
@@ -20,6 +22,8 @@ namespace ActAditionalPlugin.Services
             DataCim = DateTime.MinValue;
             NumeDepartament = string.Empty;
             CodCor = string.Empty;
+            Telefon = string.Empty;
+            Email = string.Empty;
         }
     }
 
@@ -133,7 +137,9 @@ namespace ActAditionalPlugin.Services
                     "SELECT PEX.CCCVARCHAR05 AS NrCim, PEX.DATE03 AS DataCim, " +
                     "ISNULL(D.NAME, '') AS NumeDepartament, " +
                     "ISNULL(P.IDENTITYNUM, '') AS IdentityNum, " +
-                    "ISNULL(P.ADDRESS, '') AS Domiciliu " +
+                    "ISNULL(P.ADDRESS, '') AS Domiciliu, " +
+                    "ISNULL(P.MOBILEPHONE, '') AS Telefon, " +
+                    "ISNULL(P.EMAIL, '') AS Email " +
                     "FROM PRSEXTRA PEX " +
                     "JOIN PRSN P ON PEX.PRSN = P.PRSN " +
                     "LEFT JOIN DEPART D ON P.DEPART = D.DEPART AND D.COMPANY = " + companyId + " " +
@@ -157,6 +163,8 @@ namespace ActAditionalPlugin.Services
                     result.SerieCI = serie;
                     result.NrCI = nrci;
                     result.Domiciliu = ds[0, "Domiciliu"]?.ToString()?.Trim() ?? string.Empty;
+                    result.Telefon = ds[0, "Telefon"]?.ToString()?.Trim() ?? string.Empty;
+                    result.Email = ds[0, "Email"]?.ToString()?.Trim() ?? string.Empty;
                 }
                 else
                 {
