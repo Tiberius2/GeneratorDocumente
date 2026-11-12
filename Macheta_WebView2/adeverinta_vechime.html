@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Machetă Adeverință</title>
+<style>
+/* ═══════════════════════════════════════════════════════════
+   MACHETĂ — Generator Documente HR (formular WebView2)
+   Doar vizual + comportament simulat. Nimic nu se salvează.
+   ═══════════════════════════════════════════════════════════ */
+:root{
+  --accent:#3F81C6; --accent-dark:#2C67A8; --accent-pal:#EBF1FB; --accent-border:#B4CDEB;
+  --bg:#F2F5FA; --surface:#FFFFFF; --text:#192337; --muted:#5A6982; --line:#D6DEEA;
+  --danger:#C0483F; --danger-pal:#FCEBEA; --ok:#2E8B57; --blank:#0070C0;
+  /* densitate (Compact) */
+  --fs:13px; --fs-sm:11.5px; --fs-title:16px; --input-h:30px; --pad:12px; --radius:4px;
+  --gap:10px; --sec-gap:12px; --shadow:none; --sec-border:1px solid var(--line);
+}
+body.aerisit{
+  --fs:14.5px; --fs-sm:12.5px; --fs-title:19px; --input-h:40px; --pad:22px; --radius:12px;
+  --gap:16px; --sec-gap:20px; --shadow:0 1px 2px rgba(16,24,40,.05),0 4px 14px rgba(16,24,40,.06);
+  --sec-border:1px solid #E3E9F2;
+}
+/* culori pe categorii */
+body[data-cat=acte]       {--accent:#3F81C6;--accent-dark:#2C67A8;--accent-pal:#EBF1FB;--accent-border:#B4CDEB}
+body[data-cat=suspendare] {--accent:#209E91;--accent-dark:#168075;--accent-pal:#E4F6F4;--accent-border:#A0D7D2}
+body[data-cat=incetare]   {--accent:#C04844;--accent-dark:#9E322F;--accent-pal:#FCEAEA;--accent-border:#DCAFAF}
+body[data-cat=cercetare]  {--accent:#783CAA;--accent-dark:#5C288C;--accent-pal:#F3EBFC;--accent-border:#C3A5E1}
+body[data-cat=pv]         {--accent:#C0781E;--accent-dark:#9E5E12;--accent-pal:#FEF3E2;--accent-border:#E1BE8C}
+body[data-cat=interne]    {--accent:#3B8A4A;--accent-dark:#2C6B39;--accent-pal:#E8F4EA;--accent-border:#A9D3B1}
+
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font-family:"Segoe UI",system-ui,sans-serif;font-size:var(--fs);color:var(--text);background:#C9CED8;overflow:hidden}
+button,input,select,textarea{font:inherit;color:inherit}
+
+/* ── bara machetei (nu face parte din aplicatie) ───────────── */
+.mock-bar{height:44px;display:flex;align-items:center;gap:14px;padding:0 14px;background:#232A36;color:#DDE3EC;font-size:12.5px}
+.mock-bar b{color:#fff;letter-spacing:.3px}
+.mock-bar .grp{display:flex;align-items:center;gap:6px}
+.mock-bar .sw button{background:#343D4C;border:1px solid #4A5468;color:#DDE3EC;padding:5px 12px;border-radius:6px;cursor:pointer}
+.mock-bar .sw button.on{background:#fff;color:#232A36;border-color:#fff;font-weight:600}
+.mock-bar select{background:#343D4C;border:1px solid #4A5468;color:#fff;border-radius:6px;padding:4px 8px}
+.mock-bar .note{margin-left:auto;opacity:.65}
+
+/* ── shell ─────────────────────────────────────────────────── */
+.app{display:flex;height:calc(100vh - 44px)}
+.form-col{width:40%;min-width:470px;display:flex;flex-direction:column;background:var(--bg);border-right:1px solid #B9C1CF}
+.preview-col{flex:1;display:flex;flex-direction:column;background:#E4E7ED;min-width:0}
+
+.doc-head{display:flex;align-items:center;gap:12px;padding:0 18px;height:52px;background:var(--accent);color:#fff;flex:none}
+body.aerisit .doc-head{height:64px;padding:0 24px}
+.doc-head h1{font-size:var(--fs-title);margin:0;font-weight:700;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.doc-head .cat{font-size:var(--fs-sm);opacity:.85;font-weight:400;display:block}
+.cod{display:flex;align-items:center;gap:8px;font-size:var(--fs-sm)}
+.cod span{opacity:.85}
+.cod b{background:rgba(0,0,0,.22);border:1px solid rgba(255,255,255,.35);padding:4px 12px;border-radius:var(--radius);font-size:calc(var(--fs) + 2px);letter-spacing:.5px}
+
+.scroll{flex:1;overflow-y:auto;padding:var(--sec-gap) 16px 28px}
+body.aerisit .scroll{padding-left:22px;padding-right:22px}
+
+/* angajat */
+.emp{background:var(--surface);border:var(--sec-border);border-left:4px solid var(--accent);border-radius:var(--radius);box-shadow:var(--shadow);padding:10px 14px;display:flex;gap:14px;align-items:center}
+body.aerisit .emp{padding:16px 20px;border-left-width:1px}
+.avatar{display:none;width:46px;height:46px;border-radius:50%;background:var(--accent);color:#fff;font-weight:700;align-items:center;justify-content:center;flex:none}
+body.aerisit .avatar{display:flex}
+.emp-grid{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:6px 14px;flex:1;min-width:0}
+.emp-grid div{min-width:0}
+.emp-grid small{display:block;color:var(--muted);font-size:var(--fs-sm)}
+.emp-grid b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* navigare sectiuni */
+.nav{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:6px;padding:10px 0;margin:0 0 2px;background:var(--bg)}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:3px 11px 3px 8px;font-size:var(--fs-sm);cursor:pointer;display:flex;align-items:center;gap:6px;color:var(--muted)}
+.chip:hover{border-color:var(--accent-border);color:var(--accent-dark)}
+.chip i{width:8px;height:8px;border-radius:50%;background:#C5CEDB;display:inline-block}
+.chip.done i{background:var(--ok)}
+.chip.err i{background:var(--danger)}
+
+/* sectiuni */
+.sec{margin-top:var(--sec-gap);background:var(--surface);border:var(--sec-border);border-radius:var(--radius);box-shadow:var(--shadow);scroll-margin-top:52px}
+.sec-h{display:flex;align-items:center;gap:10px;padding:8px var(--pad);background:var(--accent-pal);border-bottom:1px solid var(--line);border-left:4px solid var(--accent);border-radius:var(--radius) var(--radius) 0 0;color:var(--accent-dark);font-weight:600;font-size:var(--fs-sm);text-transform:uppercase;letter-spacing:.4px}
+body.aerisit .sec-h{background:none;border:0;padding:18px var(--pad) 4px;font-size:calc(var(--fs) + 1px);text-transform:none;letter-spacing:0;color:var(--text)}
+.sec-h .num{display:none}
+body.aerisit .sec-h .num{display:flex;width:26px;height:26px;border-radius:50%;background:var(--accent-pal);color:var(--accent-dark);align-items:center;justify-content:center;font-size:12.5px;font-weight:700}
+.sec-h .hint{margin-left:auto;font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted);font-size:var(--fs-sm)}
+.sec-b{padding:var(--pad)}
+body.aerisit .sec-b{padding-top:12px}
+
+.row{display:grid;gap:var(--gap)}
+.row + .row{margin-top:var(--gap)}
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f .l{font-size:var(--fs-sm);color:var(--muted);font-weight:600}
+body.aerisit .f .l{font-weight:500;color:#3E4C63}
+.req{color:var(--danger);font-style:normal;margin-left:2px}
+.inp{height:var(--input-h);border:1px solid #BFC9D8;border-radius:calc(var(--radius) * .6);background:#fff;padding:0 9px;width:100%;font-weight:600;outline:none;transition:border-color .15s, box-shadow .15s}
+body.aerisit .inp{border-color:#D3DBE6;font-weight:500}
+.inp:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent)}
+.inp[readonly]{background:#EEF1F6;color:#4A5568}
+.f.invalid .inp{border-color:var(--danger);box-shadow:0 0 0 3px rgba(192,72,63,.12)}
+.f .err{display:none;color:var(--danger);font-size:var(--fs-sm)}
+.f.invalid .err{display:block}
+select.inp{padding-right:4px;cursor:pointer}
+
+/* comutator intre doua variante (ambele valide) */
+.duo{display:flex;align-items:center;gap:12px;height:var(--input-h);border:1px solid #D3DBE6;border-radius:calc(var(--radius) * .6);background:#fff;padding:0 14px}
+.duo .opt{border:0;background:none;padding:0;cursor:pointer;color:var(--muted);font-weight:500;transition:color .15s}
+.duo .opt:hover{color:var(--accent-dark)}
+.duo .opt.on{color:var(--accent-dark);font-weight:700}
+.duo .switch span{background:var(--accent)}   /* ambele pozitii sunt "active": fara gri */
+
+/* lista mutatii */
+.list-tools{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;color:var(--muted);font-size:var(--fs-sm)}
+.btn{border:1px solid transparent;border-radius:calc(var(--radius) * .7);padding:0 14px;height:calc(var(--input-h) + 2px);cursor:pointer;font-weight:600;display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
+.btn-acc{background:var(--accent);color:#fff;border-color:var(--accent-dark)}
+.btn-acc:hover{background:var(--accent-dark)}
+.btn-ghost{background:#fff;border-color:var(--accent-border);color:var(--accent-dark)}
+.btn-ghost:hover{background:var(--accent-pal)}
+.btn-x{background:none;border:0;color:var(--danger);width:30px;justify-content:center;padding:0;font-size:15px}
+.btn-x:hover{background:var(--danger-pal)}
+.mcard{border:1px solid var(--accent-border);border-left:4px solid var(--accent);border-radius:calc(var(--radius) * .7);background:#fff;overflow:hidden}
+.mcard + .mcard{margin-top:8px}
+.mhead{display:flex;align-items:center;gap:10px;padding:6px 8px 6px 10px;background:var(--accent-pal);cursor:pointer;user-select:none}
+.mhead .chev{width:18px;height:18px;flex:none;transition:transform .2s;color:var(--accent-dark)}
+.mcard.open .chev{transform:rotate(180deg)}
+.mhead .nr{color:var(--accent-dark);font-weight:600;width:18px}
+.mhead .ttl{flex:1;font-weight:700;text-transform:uppercase;letter-spacing:.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mhead .ttl em{font-style:normal;color:var(--muted);font-weight:600;margin:0 6px}
+.mbody{display:grid;grid-template-rows:0fr;transition:grid-template-rows .22s ease}
+.mcard.open .mbody{grid-template-rows:1fr}
+.mbody > div{overflow:hidden}
+.mdet{padding:10px 14px 12px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px 14px}
+.mdet .cap{grid-column:1/-1;font-size:11px;font-weight:700;color:var(--accent-dark);letter-spacing:.5px;border-bottom:1px solid var(--accent-border);padding-bottom:2px;margin-top:4px}
+.mdet small{display:block;color:var(--muted);font-size:var(--fs-sm)}
+.mdet b{display:block;font-weight:600}
+.empty{border:1px dashed var(--accent-border);border-radius:var(--radius);padding:18px;text-align:center;color:var(--muted);font-style:italic}
+
+/* paragrafe finale */
+.para{border:1px solid var(--line);border-radius:calc(var(--radius) * .7)}
+.para + .para{margin-top:8px}
+.para-h{display:flex;align-items:center;gap:12px;padding:9px 12px}
+.para-h .t{flex:1;font-weight:600}
+.para-h .t small{display:block;font-weight:400;color:var(--muted);font-size:var(--fs-sm)}
+.para.on{border-color:var(--accent-border)}
+.para.on .para-h{background:var(--accent-pal)}
+.para-b{display:none;padding:12px;border-top:1px solid var(--accent-border)}
+.para.on .para-b{display:block}
+.switch{position:relative;width:46px;height:24px;flex:none;cursor:pointer}
+.switch input{display:none}
+.switch span{position:absolute;inset:0;background:#C5CEDB;border-radius:999px;transition:.2s}
+.switch span::after{content:"";position:absolute;width:18px;height:18px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s;box-shadow:0 1px 2px rgba(0,0,0,.25)}
+.switch input:checked + span{background:var(--accent)}
+.switch input:checked + span::after{left:25px}
+.sw-lbl{font-size:var(--fs-sm);font-weight:700;width:22px;color:var(--muted)}
+.para.on .sw-lbl{color:var(--accent-dark)}
+.per{display:flex;align-items:center;gap:8px}
+.per + .per{margin-top:6px}
+.per .inp{flex:1}
+.per .sep{color:var(--muted)}
+
+/* subsol */
+.foot{flex:none;display:flex;align-items:center;gap:10px;padding:10px 16px;background:#fff;border-top:1px solid var(--line)}
+.foot .grow{flex:1}
+.btn-cancel{background:#FFE0E0;border-color:#E3A3A3;color:#A02828}
+.btn-prev{background:#FFF3B0;border-color:#E9C760;color:#6E5410}
+.btn-gen{background:var(--accent);border-color:var(--accent-dark);color:#fff}
+.foot .btn{height:38px}
+
+/* previzualizare */
+.pv-bar{height:42px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;background:#fff;border-bottom:1px solid #CCD3DE;font-size:12.5px;color:var(--muted)}
+.pv-bar b{color:var(--text)}
+.pv-bar .pill{border:1px solid var(--line);border-radius:999px;padding:2px 10px}
+.pv-bar .st{margin-left:auto;display:flex;align-items:center;gap:6px}
+.pv-bar .st i{width:8px;height:8px;border-radius:50%;background:var(--ok)}
+.pv-bar .st.busy i{background:#E0A800}
+.stage{flex:1;position:relative;overflow:hidden}
+.page{position:absolute;left:50%;top:50%;width:794px;height:1123px;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.25);transform-origin:center center;padding:62px 70px;font-family:"Times New Roman",serif;font-size:14.5px;line-height:1.45;color:#000}
+.page .hdr{display:flex;justify-content:space-between;font-size:12.5px;border-bottom:1px solid #000;padding-bottom:6px}
+.page h2{text-align:center;letter-spacing:4px;margin:30px 0 4px;font-size:22px}
+.page .nr{text-align:center;margin-bottom:24px}
+.page p{text-align:justify;margin:0 0 10px;text-indent:36px}
+.page table{width:100%;border-collapse:collapse;font-size:12px;margin:10px 0 14px}
+.page th,.page td{border:1px solid #000;padding:3px 5px;vertical-align:top}
+.page th{background:#F2F2F2;font-weight:700}
+.page .up{text-transform:uppercase}
+.page .blank{color:var(--blank)}
+.page .sig{display:flex;justify-content:space-between;margin-top:46px;font-weight:700}
+.page .sig span{display:block;font-weight:400;margin-top:4px}
+.page .wm{position:absolute;bottom:22px;left:0;right:0;text-align:center;font-family:"Segoe UI",sans-serif;font-size:11px;color:#9AA3B2}
+
+/* modal */
+.ov{position:fixed;inset:0;background:rgba(20,28,40,.45);display:none;align-items:center;justify-content:center;z-index:50}
+.ov.show{display:flex}
+.modal{background:#fff;border-radius:calc(var(--radius) + 4px);width:min(760px,92vw);max-height:90vh;display:flex;flex-direction:column;box-shadow:0 18px 50px rgba(0,0,0,.3);overflow:hidden}
+.modal.sm{width:min(430px,92vw)}
+.m-h{background:var(--accent);color:#fff;padding:14px 20px;font-weight:700;font-size:15px;display:flex;align-items:center}
+.m-h.danger{background:var(--danger)}
+.m-h button{margin-left:auto;background:none;border:0;color:#fff;font-size:18px;cursor:pointer}
+.m-b{padding:16px 22px;overflow-y:auto}
+.m-f{display:flex;justify-content:flex-end;gap:10px;padding:12px 20px;border-top:1px solid var(--line);background:#F8F9FC}
+.m-f .btn{height:36px}
+.grp-cap{font-size:11.5px;font-weight:700;color:var(--accent-dark);letter-spacing:.5px;border-bottom:1px solid var(--accent-border);padding-bottom:3px;margin:14px 0 10px;text-transform:uppercase}
+.grp-cap:first-child{margin-top:2px}
+.chk{display:flex;align-items:center;gap:8px}
+.chk label{display:flex;align-items:center;gap:6px;white-space:nowrap;font-weight:600;cursor:pointer}
+.chk .inp{flex:1}
+.auto{font-size:11px;color:var(--ok);font-weight:600;margin-left:6px}
+
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:#232A36;color:#fff;padding:10px 18px;border-radius:8px;opacity:0;transition:.25s;z-index:60;pointer-events:none}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body class="aerisit" data-cat="interne">
+
+<!-- ═════ BARA MACHETEI ═════ -->
+<div class="mock-bar">
+  <b>MACHETĂ</b>
+  <div class="grp">
+    <span>Culoare categorie:</span>
+    <select id="selCat">
+      <option value="acte">Acte Adiționale (albastru)</option>
+      <option value="suspendare">Decizii Suspendare (teal)</option>
+      <option value="incetare">Decizii Încetare (roz)</option>
+      <option value="cercetare">Cercetare Disciplinară (violet)</option>
+      <option value="pv">Procese Verbale (chihlimbar)</option>
+      <option value="interne" selected>Documente Interne (verde — propunere)</option>
+    </select>
+  </div>
+  <span class="note">Date fictive · nimic nu se salvează</span>
+</div>
+
+<div class="app">
+  <!-- ═════ FORMULAR (40%) ═════ -->
+  <div class="form-col">
+    <div class="doc-head">
+      <h1>Adeverință de Vechime<span class="cat">Sabloane Documente Interne</span></h1>
+      <div class="cod"><span>Cod înregistrare</span><b id="codInreg">26315/2</b></div>
+    </div>
+
+    <div class="scroll" id="scroll">
+      <div class="emp">
+        <div class="avatar" id="avatar">PA</div>
+        <div class="emp-grid" id="empGrid"></div>
+      </div>
+
+      <div class="nav" id="nav"></div>
+
+      <!-- 1. Date adeverinta -->
+      <section class="sec" id="s-date" data-title="Date adeverință">
+        <div class="sec-h"><span class="num">1</span>Date adeverință</div>
+        <div class="sec-b">
+          <div class="row" style="grid-template-columns:1fr 1fr 1fr">
+            <label class="f" data-req><span class="l">Data adeverinței<i class="req">*</i></span>
+              <input class="inp" type="date" data-k="DataInreg"><small class="err">Câmp obligatoriu</small></label>
+            <label class="f"><span class="l">Întocmit de (HR)</span>
+              <input class="inp" data-k="NumeIntocmitorHr" value="Marin Iulia Alina"></label>
+            <label class="f"><span class="l">Director economic</span>
+              <input class="inp" data-k="NumeDirectorEconomic" value="Dunea Dorica"></label>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2. Carte de identitate -->
+      <section class="sec" id="s-ci" data-title="Carte de identitate">
+        <div class="sec-h"><span class="num">2</span>Carte de identitate<span class="hint">precompletat din ERP</span></div>
+        <div class="sec-b">
+          <div class="row" style="grid-template-columns:.7fr 1fr 1.6fr 1.2fr">
+            <label class="f"><span class="l">Seria CI</span><input class="inp" data-k="SerieCI"></label>
+            <label class="f"><span class="l">Număr CI</span><input class="inp" data-k="NrCI"></label>
+            <label class="f"><span class="l">Autoritatea emitentă</span><input class="inp" data-k="AutoritateEmitenta" value="SPCLEP Botoșani"></label>
+            <label class="f" data-req><span class="l">Data eliberării<i class="req">*</i></span>
+              <input class="inp" type="date" data-k="DataEliberareCI"><small class="err">Câmp obligatoriu</small></label>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3. Contract de munca -->
+      <section class="sec" id="s-cim" data-title="Contract de muncă">
+        <div class="sec-h"><span class="num">3</span>Contract de muncă</div>
+        <div class="sec-b">
+          <div class="row" style="grid-template-columns:1fr 1fr">
+            <div class="f"><span class="l">Tip normă</span>
+              <div class="duo" data-k="TipNorma" data-a="întreagă" data-b="parțială"></div></div>
+            <div class="f"><span class="l">Durata contractului</span>
+              <div class="duo" data-k="TipDurataContract" data-a="nedeterminată" data-b="determinată"></div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 4. Mutatii -->
+      <section class="sec" id="s-mut" data-title="Mutații intervenite">
+        <div class="sec-h"><span class="num">4</span>Mutații intervenite<span class="hint" id="mutCount"></span></div>
+        <div class="sec-b">
+          <div class="list-tools">
+            <span>Prima mutație e precompletată din datele CIM.</span>
+            <button class="btn btn-acc" id="btnAddMut">＋ Adaugă mutație</button>
+          </div>
+          <div id="mutList"></div>
+        </div>
+      </section>
+
+      <!-- 5. Paragrafe finale -->
+      <section class="sec" id="s-par" data-title="Paragrafe finale">
+        <div class="sec-h"><span class="num">5</span>Paragrafe finale<span class="hint">Nu = linii punctate în document</span></div>
+        <div class="sec-b" id="paraList"></div>
+      </section>
+    </div>
+
+    <div class="foot">
+      <button class="btn btn-cancel">⟵ Anulare</button>
+      <span class="grow"></span>
+      <button class="btn btn-prev" id="btnPrev">⟳ Previzualizează</button>
+      <button class="btn btn-gen" id="btnGen">⤓ Generează PDF</button>
+    </div>
+  </div>
+
+  <!-- ═════ PREVIZUALIZARE (60%) ═════ -->
+  <div class="preview-col">
+    <div class="pv-bar">
+      <b>Previzualizare</b>
+      <span class="pill">Potrivire pe pagină</span>
+      <span class="pill">Pagina 1 / 1</span>
+      <span class="st" id="pvSt"><i></i><span>actualizat</span></span>
+    </div>
+    <div class="stage" id="stage"><div class="page" id="page"></div></div>
+  </div>
+</div>
+
+<!-- ═════ MODAL MUTATIE ═════ -->
+<div class="ov" id="ovMut">
+  <div class="modal">
+    <div class="m-h"><span id="mutTitle">Adăugare — Mutație intervenită</span><button data-close>✕</button></div>
+    <div class="m-b">
+      <div class="grp-cap">Mutația</div>
+      <div class="row" style="grid-template-columns:1fr 1fr">
+        <label class="f"><span class="l">Tip mutație</span>
+          <select class="inp" id="m_tip">
+            <option>Incheiere Contract</option><option>Modificare Contract</option>
+            <option>Suspendare Contract</option><option>Incetare Contract</option>
+          </select></label>
+        <label class="f"><span class="l">Data mutației</span><input class="inp" type="date" id="m_data"></label>
+      </div>
+      <div class="row" style="grid-template-columns:1fr">
+        <label class="f"><span class="l">Meseria / funcția la data mutației</span><input class="inp" id="m_functie"></label>
+      </div>
+
+      <div class="grp-cap">Salariu</div>
+      <div class="row" style="grid-template-columns:.8fr 1.6fr">
+        <label class="f"><span class="l">Salariul de bază (lei)</span><input class="inp" id="m_sal" inputmode="decimal" placeholder="ex. 4.325"></label>
+        <div class="f"><span class="l">Spor</span>
+          <div class="chk"><label><input type="checkbox" id="m_sporOn"> Are spor</label><input class="inp" id="m_spor" disabled placeholder="detalii spor"></div></div>
+      </div>
+
+      <div class="grp-cap">Actul care atestă mutația</div>
+      <div class="row" style="grid-template-columns:1.2fr 1fr 1fr">
+        <label class="f"><span class="l">Tip act<span class="auto" id="m_tipActAuto"></span></span>
+          <select class="inp" id="m_tipAct">
+            <option>Contract</option><option>Act aditional</option><option>Decizie</option>
+            <option>Notificare</option><option>Cerere</option><option>Referat</option>
+          </select></label>
+        <label class="f"><span class="l">Nr. înregistrare act</span><input class="inp" id="m_nrAct"></label>
+        <label class="f"><span class="l">Data actului</span><input class="inp" type="date" id="m_dataAct"></label>
+      </div>
+      <div class="row" style="grid-template-columns:1fr">
+        <div class="f"><span class="l">Temei legal</span>
+          <div class="chk"><label><input type="checkbox" id="m_temeiOn"> Are temei legal</label><input class="inp" id="m_temei" disabled placeholder="ex. art. 17 alin. (5) din Codul muncii"></div></div>
+      </div>
+    </div>
+    <div class="m-f">
+      <button class="btn btn-ghost" data-close>Anulează</button>
+      <button class="btn btn-acc" id="btnSaveMut">✓ Salvează</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═════ CONFIRMARE ═════ -->
+<div class="ov" id="ovConf">
+  <div class="modal sm">
+    <div class="m-h danger"><span id="confTitle">Confirmare ștergere</span></div>
+    <div class="m-b" id="confMsg"></div>
+    <div class="m-f">
+      <button class="btn btn-ghost" id="confNo">Nu</button>
+      <button class="btn btn-acc" id="confYes" style="background:var(--danger);border-color:#9E322F">Da</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+//  DATE FICTIVE (in aplicatie vin din ERP / CommonDocumentValues)
+// ═══════════════════════════════════════════════════════════
+const EMP = {
+  NumeSalariat: "POPESCU ANA-MARIA", CNP: "2850312070011", Functie: "Muncitor necalificat",
+  NrCim: "145/8", DataCim: "2021-05-25", NumeDepartament: "Producție",
+  SerieCI: "XT", NrCI: "512343"
+};
+const BLANK = "_ _ _ _ _ _ _ _ _ _ _ _ _ _ _";
+const today = () => new Date().toISOString().slice(0, 10);
+const fmt = iso => iso ? iso.split("-").reverse().join(".") : "";
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+
+// on_select: tip mutatie -> act + campuri precompletate
+const RULES = {
+  "Incheiere Contract":  { tipAct: "Contract", functie: EMP.Functie, data: EMP.DataCim, nrAct: EMP.NrCim, dataAct: EMP.DataCim },
+  "Modificare Contract": { tipAct: "Act aditional", functie: EMP.Functie },
+  "Suspendare Contract": { tipAct: "Decizie", functie: EMP.Functie },
+  "Incetare Contract":   { tipAct: "Decizie", functie: EMP.Functie }
+};
+
+const state = {
+  mutatii: [{
+    tip: "Incheiere Contract", data: EMP.DataCim, functie: EMP.Functie, sal: "",
+    sporOn: false, spor: "", tipAct: "Contract", nrAct: EMP.NrCim, dataAct: EMP.DataCim,
+    temeiOn: false, temei: ""
+  }],
+  paragrafe: {
+    incetare: { on: false, data: today(), prevederi: "Art. 81 alin. 7 din Legea nr. 53/2003" },
+    absente: { on: false, perioade: [] },
+    cfp: { on: false, perioade: [] },
+    incapacitate: { on: false, perioade: [] }
+  }
+};
+
+// ═══════════════════════════════════════════════════════════
+//  ANGAJAT + CAMPURI PRECOMPLETATE
+// ═══════════════════════════════════════════════════════════
+function renderEmp() {
+  const rows = [["Angajat", EMP.NumeSalariat], ["CNP", EMP.CNP], ["Funcție", EMP.Functie],
+                ["Nr. CIM", EMP.NrCim], ["Data CIM", fmt(EMP.DataCim)], ["Departament", EMP.NumeDepartament]];
+  $("#empGrid").innerHTML = rows.map(([l, v]) => `<div><small>${l}</small><b title="${esc(v)}">${esc(v)}</b></div>`).join("");
+  $("#avatar").textContent = EMP.NumeSalariat.split(/\s+/).map(p => p[0]).slice(0, 2).join("");
+  $('[data-k=DataInreg]').value = today();
+  $('[data-k=SerieCI]').value = EMP.SerieCI;
+  $('[data-k=NrCI]').value = EMP.NrCI;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  NAVIGARE + STARE SECTIUNI
+// ═══════════════════════════════════════════════════════════
+function renderNav() {
+  $("#nav").innerHTML = $$(".sec").map(s =>
+    `<button class="chip" data-go="${s.id}"><i></i>${s.dataset.title}</button>`).join("");
+  $$("#nav .chip").forEach(c => c.onclick = () =>
+    document.getElementById(c.dataset.go).scrollIntoView({ behavior: "smooth", block: "start" }));
+  updateNav();
+}
+function updateNav() {
+  $$(".sec").forEach(s => {
+    const chip = $(`#nav [data-go="${s.id}"]`);
+    if (!chip) return;
+    const reqs = [...s.querySelectorAll("[data-req] .inp")];
+    let ok = reqs.every(i => i.value);
+    if (s.id === "s-mut") ok = state.mutatii.length > 0;
+    chip.classList.toggle("done", ok);
+    chip.classList.toggle("err", !ok && s.classList.contains("tried"));
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+//  MUTATII
+// ═══════════════════════════════════════════════════════════
+const CHEV = `<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="square"><polyline points="5,9 12,16 19,9"/></svg>`;
+const salFmt = v => v === "" ? "" : Number(v).toLocaleString("ro-RO", { maximumFractionDigits: 2 }) + " lei";
+
+function renderMut() {
+  const L = $("#mutList");
+  $("#mutCount").textContent = state.mutatii.length ? state.mutatii.length + " " + (state.mutatii.length === 1 ? "mutație" : "mutații") : "";
+  if (!state.mutatii.length) {
+    L.innerHTML = `<div class="empty">Nu a fost adăugată nicio mutație. Apasă „＋ Adaugă mutație”.</div>`;
+    updateNav(); return;
+  }
+  const open = new Set($$(".mcard.open").map(c => +c.dataset.i));
+  L.innerHTML = state.mutatii.map((m, i) => `
+    <div class="mcard ${open.has(i) ? "open" : ""}" data-i="${i}">
+      <div class="mhead" data-tog>
+        ${CHEV}<span class="nr">${i + 1}.</span>
+        <span class="ttl">${esc(m.tip)}<em>·</em>${fmt(m.data)}<em>·</em>${esc(m.functie || "—")}</span>
+        <button class="btn btn-ghost" data-edit style="height:28px">✎ Editează</button>
+        <button class="btn btn-x" data-del title="Șterge">✕</button>
+      </div>
+      <div class="mbody"><div><div class="mdet">
+        <div class="cap">MUTAȚIA</div>
+        <div><small>Tip mutație</small><b>${esc(m.tip)}</b></div>
+        <div><small>Data mutației</small><b>${fmt(m.data) || "—"}</b></div>
+        <div><small>Meseria / funcția</small><b>${esc(m.functie) || "—"}</b></div>
+        <div class="cap">SALARIU</div>
+        <div><small>Salariul de bază</small><b>${salFmt(m.sal) || "—"}</b></div>
+        <div style="grid-column:span 2"><small>Spor</small><b>${m.sporOn && m.spor ? esc(m.spor) : "—"}</b></div>
+        <div class="cap">ACTUL CARE ATESTĂ MUTAȚIA</div>
+        <div><small>Tip act</small><b>${esc(m.tipAct)}</b></div>
+        <div><small>Nr. înregistrare</small><b>${esc(m.nrAct) || "—"}</b></div>
+        <div><small>Data actului</small><b>${fmt(m.dataAct) || "—"}</b></div>
+        <div style="grid-column:1/-1"><small>Temei legal</small><b>${m.temeiOn && m.temei ? esc(m.temei) : "—"}</b></div>
+      </div></div></div>
+    </div>`).join("");
+
+  $$("#mutList .mcard").forEach(card => {
+    const i = +card.dataset.i;
+    card.querySelector("[data-tog]").onclick = e => { if (!e.target.closest("button")) card.classList.toggle("open"); };
+    card.querySelector("[data-edit]").onclick = () => openMut(i);
+    card.querySelector("[data-del]").onclick = () => confirmDel(`Ștergi mutația nr. ${i + 1} din lista „Mutații intervenite”?`,
+      () => { state.mutatii.splice(i, 1); renderMut(); schedulePreview(); });
+  });
+  updateNav();
+}
+
+let editIdx = -1;
+function openMut(i) {
+  editIdx = i;
+  const m = i >= 0 ? state.mutatii[i] : null;
+  $("#mutTitle").textContent = i >= 0 ? `Editare — Mutație intervenită (nr. ${i + 1})` : "Adăugare — Mutație intervenită";
+  const v = m || { tip: "Modificare Contract", data: today(), functie: "", sal: "", sporOn: false, spor: "",
+                   tipAct: "Contract", nrAct: "", dataAct: today(), temeiOn: false, temei: "" };
+  $("#m_tip").value = v.tip; $("#m_data").value = v.data; $("#m_functie").value = v.functie;
+  $("#m_sal").value = v.sal; $("#m_sporOn").checked = v.sporOn; $("#m_spor").value = v.spor;
+  $("#m_tipAct").value = v.tipAct; $("#m_nrAct").value = v.nrAct; $("#m_dataAct").value = v.dataAct;
+  $("#m_temeiOn").checked = v.temeiOn; $("#m_temei").value = v.temei;
+  syncChecks();
+  $("#m_tipActAuto").textContent = "";
+  if (!m) applyRule();                   // element nou: regulile pentru tipul implicit
+  $("#ovMut").classList.add("show");
+  setTimeout(() => $("#m_tip").focus(), 30);
+}
+function applyRule() {
+  const r = RULES[$("#m_tip").value]; if (!r) return;
+  if (r.tipAct) { $("#m_tipAct").value = r.tipAct; $("#m_tipActAuto").textContent = "• setat automat"; }
+  if (r.data) $("#m_data").value = r.data;
+  if (r.dataAct) $("#m_dataAct").value = r.dataAct;
+  if (r.functie && !$("#m_functie").value) $("#m_functie").value = r.functie;
+  if (r.nrAct && !$("#m_nrAct").value) $("#m_nrAct").value = r.nrAct;
+}
+function syncChecks() {
+  $("#m_spor").disabled = !$("#m_sporOn").checked;
+  $("#m_temei").disabled = !$("#m_temeiOn").checked;
+}
+$("#m_tip").onchange = applyRule;
+$("#m_tipAct").onchange = () => $("#m_tipActAuto").textContent = "";
+$("#m_sporOn").onchange = () => { syncChecks(); if ($("#m_sporOn").checked) $("#m_spor").focus(); };
+$("#m_temeiOn").onchange = () => { syncChecks(); if ($("#m_temeiOn").checked) $("#m_temei").focus(); };
+$("#btnAddMut").onclick = () => openMut(-1);
+$("#btnSaveMut").onclick = () => {
+  const m = {
+    tip: $("#m_tip").value, data: $("#m_data").value, functie: $("#m_functie").value.trim(),
+    sal: $("#m_sal").value.replace(/\./g, "").replace(",", ".").trim(),
+    sporOn: $("#m_sporOn").checked, spor: $("#m_spor").value.trim(),
+    tipAct: $("#m_tipAct").value, nrAct: $("#m_nrAct").value.trim(), dataAct: $("#m_dataAct").value,
+    temeiOn: $("#m_temeiOn").checked, temei: $("#m_temei").value.trim()
+  };
+  if (editIdx >= 0) state.mutatii[editIdx] = m; else state.mutatii.push(m);
+  closeOv("#ovMut"); renderMut(); schedulePreview();
+  toast(editIdx >= 0 ? "Mutația a fost actualizată" : "Mutația a fost adăugată");
+};
+
+// ═══════════════════════════════════════════════════════════
+//  PARAGRAFE FINALE
+// ═══════════════════════════════════════════════════════════
+const PARA = [
+  ["incetare", "Încetare contract", "Data încetării și temeiul legal"],
+  ["absente", "Absențe nemotivate", "Perioadele de absență nemotivată"],
+  ["cfp", "Concediu fără plată", "Perioadele de concediu fără plată"],
+  ["incapacitate", "Incapacitate temporară de muncă", "Perioadele de incapacitate temporară"]
+];
+function renderPara() {
+  $("#paraList").innerHTML = PARA.map(([k, t, d]) => {
+    const p = state.paragrafe[k];
+    const body = k === "incetare"
+      ? `<div class="row" style="grid-template-columns:1fr 2fr">
+           <label class="f"><span class="l">Data încetării</span><input class="inp" type="date" data-p="data" value="${p.data}"></label>
+           <label class="f"><span class="l">Prevederi legale</span><input class="inp" data-p="prevederi" value="${esc(p.prevederi)}"></label>
+         </div>`
+      : `${p.perioade.map((x, j) => `
+           <div class="per">
+             <input class="inp" type="date" data-per="${j}" data-end="0" value="${x[0]}"><span class="sep">–</span>
+             <input class="inp" type="date" data-per="${j}" data-end="1" value="${x[1]}">
+             <button class="btn btn-x" data-delper="${j}" title="Șterge perioada">✕</button>
+           </div>`).join("")}
+         <button class="btn btn-ghost" data-addper style="margin-top:${p.perioade.length ? 8 : 0}px;height:30px">＋ Adaugă perioadă</button>`;
+    return `<div class="para ${p.on ? "on" : ""}" data-k="${k}">
+      <div class="para-h">
+        <div class="t">${t}<small>${d}</small></div>
+        <span class="sw-lbl">${p.on ? "Da" : "Nu"}</span>
+        <label class="switch"><input type="checkbox" ${p.on ? "checked" : ""}><span></span></label>
+      </div>
+      <div class="para-b">${body}</div>
+    </div>`;
+  }).join("");
+
+  $$("#paraList .para").forEach(el => {
+    const k = el.dataset.k, p = state.paragrafe[k];
+    el.querySelector(".switch input").onchange = e => {
+      p.on = e.target.checked;
+      if (p.on && p.perioade && !p.perioade.length) p.perioade.push([today(), today()]);
+      renderPara(); schedulePreview();
+    };
+    el.querySelectorAll("[data-p]").forEach(i => i.oninput = () => { p[i.dataset.p] = i.value; schedulePreview(); });
+    el.querySelectorAll("[data-per]").forEach(i => i.oninput = () => {
+      const r = p.perioade[+i.dataset.per];
+      r[+i.dataset.end] = i.value;
+      if (r[1] < r[0]) { r[1] = r[0]; }
+      schedulePreview();
+    });
+    el.querySelectorAll("[data-delper]").forEach(b => b.onclick = () => confirmDel(
+      `Ștergi perioada nr. ${+b.dataset.delper + 1}?`, () => { p.perioade.splice(+b.dataset.delper, 1); renderPara(); schedulePreview(); }));
+    const add = el.querySelector("[data-addper]");
+    if (add) add.onclick = () => { p.perioade.push([today(), today()]); renderPara(); schedulePreview(); };
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+//  PREVIZUALIZARE (simulata; in aplicatie = PDF din Word)
+// ═══════════════════════════════════════════════════════════
+const val = k => { const el = $(`[data-k="${k}"]`); return el ? (el.classList.contains("duo") ? el.querySelector(".opt.on").textContent : el.value) : ""; };
+const or = (v, hl) => v ? `<b${hl ? ' class="up"' : ""}>${esc(v)}</b>` : `<span class="blank">${BLANK}</span>`;
+function perioade(p) { return p.on && p.perioade.length ? p.perioade.map(x => fmt(x[0]) + " - " + fmt(x[1])).join(" și în perioada ") : ""; }
+
+function renderPreview() {
+  const P = state.paragrafe;
+  const rows = state.mutatii.map((m, i) => {
+    const [a, l, z] = (m.data || "--").split("-");
+    const sal = salFmt(m.sal);
+    return `<tr><td>${i + 1}</td><td class="up">${esc(m.tip)}</td><td>${a || ""}</td><td>${l || ""}</td><td>${z || ""}</td>
+      <td class="up">${esc(m.functie)}</td><td>${sal}${m.sporOn && m.spor ? "<br>" + esc(m.spor) : ""}</td>
+      <td>${esc(m.tipAct)}<br>${esc(m.nrAct)}${m.dataAct ? " / " + fmt(m.dataAct) : ""}${m.temeiOn && m.temei ? "<br>" + esc(m.temei) : ""}</td></tr>`;
+  }).join("") || `<tr><td colspan="8" style="text-align:center;color:#999">—</td></tr>`;
+
+  $("#page").innerHTML = `
+    <div class="hdr"><span><b>VATRA DOMNEASCĂ SRL</b><br>CIF … · J07/…</span><span style="text-align:right">Nr. ${esc($("#codInreg").textContent)}<br>din ${fmt(val("DataInreg"))}</span></div>
+    <h2>ADEVERINȚĂ</h2>
+    <div class="nr">de vechime în muncă</div>
+    <p>Prin prezenta se adeverește că <b>${esc(EMP.NumeSalariat)}</b>, CNP ${esc(EMP.CNP)}, posesor/posesoare a CI seria
+      ${or(val("SerieCI"))} nr. ${or(val("NrCI"))}, eliberată de ${or(val("AutoritateEmitenta"))} la data de ${or(fmt(val("DataEliberareCI")))},
+      este/a fost angajat(ă) cu contract individual de muncă cu normă ${or(val("TipNorma"))}, încheiat pe durată ${or(val("TipDurataContract"))},
+      înregistrat în registrul general de evidență a salariaților cu nr. ${esc(EMP.NrCim)} / ${fmt(EMP.DataCim)}.</p>
+    <p>Pe durata executării contractului individual de muncă au intervenit următoarele mutații:</p>
+    <table>
+      <tr><th rowspan="2">Nr.</th><th rowspan="2">Mutația intervenită</th><th colspan="3">Data</th><th rowspan="2">Meseria / funcția</th><th rowspan="2">Salariul</th><th rowspan="2">Actul</th></tr>
+      <tr><th>An</th><th>Luna</th><th>Ziua</th></tr>
+      ${rows}
+    </table>
+    <p>Începând cu data de ${or(P.incetare.on ? fmt(P.incetare.data) : "")} contractul individual de muncă a încetat în temeiul
+      ${or(P.incetare.on ? P.incetare.prevederi : "")}.</p>
+    <p>Pe durata executării contractului, salariatul a avut absențe nemotivate în perioada ${or(perioade(P.absente))}.</p>
+    <p>Salariatul a beneficiat de concediu fără plată în perioada ${or(perioade(P.cfp))}.</p>
+    <p>Salariatul a beneficiat de concediu pentru incapacitate temporară de muncă în perioada ${or(perioade(P.incapacitate))}.</p>
+    <div class="sig"><div>Director economic,<span>${esc(val("NumeDirectorEconomic"))}</span></div><div style="text-align:right">Întocmit,<span>${esc(val("NumeIntocmitorHr"))}</span></div></div>
+    <div class="wm">Previzualizare simulată în machetă — în aplicație aici apare PDF-ul generat din șablonul Word</div>`;
+  fitPage();
+  const st = $("#pvSt"); st.classList.remove("busy"); st.lastElementChild.textContent = "actualizat";
+}
+let pvT;
+function schedulePreview() {
+  const st = $("#pvSt"); st.classList.add("busy"); st.lastElementChild.textContent = "se actualizează…";
+  clearTimeout(pvT); pvT = setTimeout(renderPreview, 600);
+}
+function fitPage() {
+  const s = $("#stage"), pad = 28;
+  const k = Math.min((s.clientWidth - pad) / 794, (s.clientHeight - pad) / 1123);
+  $("#page").style.transform = `translate(-50%,-50%) scale(${k})`;
+}
+window.addEventListener("resize", fitPage);
+
+// ═══════════════════════════════════════════════════════════
+//  MODALE / VALIDARE / UTILITARE
+// ═══════════════════════════════════════════════════════════
+function closeOv(sel) { $(sel).classList.remove("show"); }
+$$("[data-close]").forEach(b => b.onclick = () => closeOv("#ovMut"));
+let confCb;
+function confirmDel(msg, cb) {
+  $("#confMsg").textContent = msg; confCb = cb; $("#ovConf").classList.add("show");
+  setTimeout(() => $("#confNo").focus(), 30);
+}
+$("#confNo").onclick = () => closeOv("#ovConf");
+$("#confYes").onclick = () => { closeOv("#ovConf"); if (confCb) confCb(); };
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") { closeOv("#ovConf"); closeOv("#ovMut"); }
+});
+function toast(t) { const el = $("#toast"); el.textContent = t; el.classList.add("show"); clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove("show"), 1800); }
+
+$("#btnPrev").onclick = () => { renderPreview(); toast("Previzualizare actualizată"); };
+$("#btnGen").onclick = () => {
+  let first = null;
+  $$(".sec").forEach(s => s.classList.add("tried"));
+  $$("[data-req]").forEach(f => {
+    const bad = !f.querySelector(".inp").value;
+    f.classList.toggle("invalid", bad);
+    if (bad && !first) first = f;
+  });
+  updateNav();
+  if (!state.mutatii.length) { toast("Adaugă cel puțin o mutație"); $("#s-mut").scrollIntoView({ behavior: "smooth" }); return; }
+  if (first) { first.scrollIntoView({ behavior: "smooth", block: "center" }); first.querySelector(".inp").focus(); return; }
+  toast("Machetă: aici urmează confirmarea și generarea PDF-ului");
+};
+
+// comutator intre doua variante: [optiune A] (switch) [optiune B]
+$$(".duo").forEach(g => {
+  g.innerHTML = `<button type="button" class="opt on">${g.dataset.a}</button>
+    <label class="switch"><input type="checkbox"><span></span></label>
+    <button type="button" class="opt">${g.dataset.b}</button>`;
+  const chk = g.querySelector("input"), [a, b] = g.querySelectorAll(".opt");
+  const set = isB => { chk.checked = isB; a.classList.toggle("on", !isB); b.classList.toggle("on", isB); schedulePreview(); };
+  chk.onchange = () => set(chk.checked);
+  a.onclick = () => set(false);
+  b.onclick = () => set(true);
+});
+// orice camp -> previzualizare + stare navigare
+document.addEventListener("input", e => {
+  if (e.target.closest(".form-col") && e.target.dataset.k) {
+    const f = e.target.closest(".f"); if (f) f.classList.remove("invalid");
+    updateNav(); schedulePreview();
+  }
+});
+
+// bara machetei
+$("#selCat").onchange = e => document.body.dataset.cat = e.target.value;
+
+// start
+renderEmp(); renderNav(); renderMut(); renderPara(); renderPreview();
+</script>
+</body>
+</html>

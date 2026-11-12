@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Generator Documente HR</title>
+<link rel="stylesheet" href="form.css">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="selector.css">
+<script>
+  // Diagnostic: orice eroare JavaScript se trimite la C#
+  window.onerror = function (msg, src, line, col) {
+    var text = msg + " (" + String(src || "").split("/").pop() + ":" + line + ":" + col + ")";
+    try { window.chrome.webview.postMessage({ type: "jserror", message: text }); } catch (e) { }
+  };
+</script>
+</head>
+<body>
+  <div class="sel-app">
+    <header class="sel-head">
+      <button type="button" class="emp-btn" id="empBtn" title="Alege angajatul pentru care generezi documentul"></button>
+      <button type="button" class="dosar-btn" id="dosarBtn" hidden title="Deschide dosarul angajatului">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M3 7.5a2 2 0 0 1 2-2h4l2 2.2h8a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+        <span>Dosar personal</span>
+      </button>
+      <div class="sel-title"><b>Generator Documente HR</b><span>Alege angajatul, apoi documentul</span></div>
+    </header>
+
+    <div class="sel-tools">
+      <div class="sel-search">
+        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+        <input class="inp" id="docSearch" type="text" placeholder="Caută un document…" autocomplete="off" spellcheck="false">
+      </div>
+      <span class="sel-hint">Clic pe document pentru a-l alege · dublu-clic sau Enter pentru a-l deschide</span>
+    </div>
+
+    <main class="sel-cols" id="cols"><div class="empty">Se încarcă documentele…</div></main>
+
+    <footer class="sel-foot">
+      <span class="sel-st" id="selSt"></span>
+      <button class="btn btn-ghost" type="button" id="btnClose">Închide</button>
+      <button class="btn btn-acc" type="button" id="btnGo" disabled>Continuă →</button>
+    </footer>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <script src="picker.js"></script>
+  <script src="selector.js"></script>
+</body>
+</html>

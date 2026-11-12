@@ -15,9 +15,14 @@ namespace ActAditionalPlugin.Services
         public string Domiciliu { get; set; }
         public string Telefon { get; set; }
         public string Email { get; set; }
+        // Din EMPLOYEE (legat prin PRSN + COMPANY): autoritatea emitenta si data eliberarii CI
+        public string AutoritateEmitentaCI { get; set; }
+        public DateTime DataEliberareCI { get; set; }
 
         public ErpCimData()
         {
+            AutoritateEmitentaCI = string.Empty;
+            DataEliberareCI = DateTime.MinValue;
             NrCim = string.Empty;
             DataCim = DateTime.MinValue;
             NumeDepartament = string.Empty;
@@ -59,6 +64,67 @@ namespace ActAditionalPlugin.Services
 
     public static class ErpDataProvider
     {
+        // ── Toti angajatii activi ai companiei (selectorul de angajati) ──
+        private const string SqlAngajati =
+            "SELECT " +
+            "    P.PRSN, " +
+            "    P.NAME AS Nume, " +
+            "    ISNULL(P.NAME2, '') AS Prenume, " +
+            "    P.NAME + ' ' + ISNULL(P.NAME2, '') AS NumeComplet, " +
+            "    ISNULL(P.AFM, '') AS CNP, " +
+            "    ISNULL(P.SOTITLENAME, '') AS Functie, " +
+            "    ISNULL(S.CODE, '') AS CodCor, " +
+            "    ISNULL(PEX.CCCVARCHAR05, '') AS NrCim, " +
+            "    PEX.DATE03 AS DataCim, " +
+            "    ISNULL(D.NAME, '') AS NumeDepartament, " +
+            "    ISNULL(P.IDENTITYNUM, '') AS IdentityNum, " +
+            "    ISNULL(P.ADDRESS, '') AS Domiciliu " +
+            "FROM PRSN P " +
+            "JOIN PRSEXTRA PEX ON PEX.PRSN = P.PRSN AND PEX.COMPANY = P.COMPANY " +
+            "LEFT JOIN PRSJOBPOS PJ ON PJ.PRSN = P.PRSN AND PJ.COMPANY = P.COMPANY " +
+            "LEFT JOIN JOBPOSITION J ON PJ.JOBPOSITION = J.JOBPOSITION " +
+            "LEFT JOIN SPECIALTY S ON J.SPECIALTY = S.SPECIALTY " +
+            "LEFT JOIN DEPART D ON P.DEPART = D.DEPART AND D.COMPANY = P.COMPANY " +
+            "WHERE P.COMPANY = {0} AND P.ISACTIVE = 1 " +
+            "ORDER BY P.NAME, P.NAME2";
+
+        public static System.Collections.Generic.List<PersonInfo> LoadPersons(XSupport xs)
+        {
+            var result = new System.Collections.Generic.List<PersonInfo>();
+            var ds = xs.GetSQLDataSet(string.Format(SqlAngajati, xs.ConnectionInfo.CompanyId));
+            if (ds == null) return result;
+
+            for (int i = 0; i < ds.Count; i++)
+            {
+                var p = new PersonInfo
+                {
+                    PrsnId = Convert.ToInt32(ds[i, "PRSN"]),
+                    Nume = ds[i, "Nume"]?.ToString()?.Trim() ?? string.Empty,
+                    Prenume = ds[i, "Prenume"]?.ToString()?.Trim() ?? string.Empty,
+                    NumeComplet = ds[i, "NumeComplet"]?.ToString()?.Trim() ?? string.Empty,
+                    CNP = ds[i, "CNP"]?.ToString()?.Trim() ?? string.Empty,
+                    Functie = ds[i, "Functie"]?.ToString()?.Trim() ?? string.Empty,
+                    CodCor = ds[i, "CodCor"]?.ToString()?.Trim() ?? string.Empty,
+                    NrCim = ds[i, "NrCim"]?.ToString()?.Trim() ?? string.Empty,
+                    NumeDepartament = ds[i, "NumeDepartament"]?.ToString()?.Trim() ?? string.Empty,
+                    Domiciliu = ds[i, "Domiciliu"]?.ToString()?.Trim() ?? string.Empty
+                };
+
+                DateTime dataCim;
+                if (DateTime.TryParse(ds[i, "DataCim"]?.ToString() ?? string.Empty, out dataCim))
+                    p.DataCim = dataCim;
+
+                string serie, nrci;
+                PersonInfo.ParseIdentityNum(ds[i, "IdentityNum"]?.ToString()?.Trim() ?? string.Empty,
+                    out serie, out nrci);
+                p.SerieCI = serie;
+                p.NrCI = nrci;
+
+                result.Add(p);
+            }
+            return result;
+        }
+
         /// <summary>
         /// Preia toate datele companiei + reprezentantul legal + functia lui
         /// intr-un singur SQL cu JOIN.
@@ -169,6 +235,28 @@ namespace ActAditionalPlugin.Services
                 else
                 {
                     xSupport.Warning("ActAditional: nu s-a gasit contract pentru PRSN " + prsnId);
+                }
+
+                // Carte de identitate — din EMPLOYEE (EMPLOYEE.ISSAUTHORITY, EMPLOYEE.DATEISS).
+                // Interogare separata, cu try propriu: daca ceva nu merge aici,
+                // restul datelor angajatului raman incarcate.
+                try
+                {
+                    var dsCi = xSupport.GetSQLDataSet(
+                        "SELECT ISNULL(E.ISSAUTHORITY, '') AS AutoritateCI, E.DATEISS AS DataEliberareCI " +
+                        "FROM EMPLOYEE E " +
+                        "WHERE E.PRSN = " + prsnId + " AND E.COMPANY = " + companyId);
+                    if (dsCi != null && dsCi.Count > 0)
+                    {
+                        result.AutoritateEmitentaCI = dsCi[0, "AutoritateCI"]?.ToString()?.Trim() ?? string.Empty;
+                        DateTime dataIss;
+                        if (DateTime.TryParse(dsCi[0, "DataEliberareCI"]?.ToString() ?? string.Empty, out dataIss))
+                            result.DataEliberareCI = dataIss;
+                    }
+                }
+                catch (Exception exCi)
+                {
+                    System.Diagnostics.Debug.WriteLine("[ErpDataProvider] EMPLOYEE (CI): " + exCi.Message);
                 }
 
                 // CodCor — din PRSJOBPOS -> JOBPOSITION -> SPECIALTY

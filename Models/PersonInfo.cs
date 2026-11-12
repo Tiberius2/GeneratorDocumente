@@ -3,7 +3,7 @@
 namespace ActAditionalPlugin.Models
 {
     /// <summary>
-    /// Date complete despre o persoana selectata din PersonPickerDialog.
+    /// Datele unui angajat (selectorul de persoane, campurile person_picker).
     /// Folosit ca DTO universal oriunde apare un camp de tip persoana.
     /// </summary>
     public class PersonInfo

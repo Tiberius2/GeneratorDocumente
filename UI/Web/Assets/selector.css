@@ -1,0 +1,64 @@
+/* ═══════════════════════════════════════════════════════════
+   Selectorul de documente (peste form.css + app.css)
+   ═══════════════════════════════════════════════════════════ */
+.sel-app{height:100vh;display:flex;flex-direction:column;background:var(--bg)}
+
+/* ── antet ──────────────────────────────────────────────── */
+.sel-head{display:flex;align-items:center;gap:10px;height:78px;padding:0 20px;background:#424C67;color:#fff;flex:none}
+.emp-btn{display:flex;align-items:center;gap:12px;height:58px;width:min(440px,46vw);padding:0 14px 0 12px;border-radius:10px;cursor:pointer;text-align:left;
+  border:1.5px solid #3E64A2;background:#233962;color:#fff;transition:background .15s}
+.emp-btn:hover{background:#304A7A}
+.emp-btn .av{width:38px;height:38px;border-radius:50%;background:#345A96;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:none}
+.emp-btn .tx{flex:1;min-width:0}
+.emp-btn small{display:block;font-size:10.5px;font-weight:700;letter-spacing:.6px;color:#8FB4EA}
+.emp-btn b{display:block;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.emp-btn .ed{font-size:16px;color:#8FB4EA;flex:none}
+/* fara angajat: rosu, punct pulsand */
+.emp-btn.none{background:#943030;border-color:#C34E4E}
+.emp-btn.none:hover{background:#AC3A3A}
+.emp-btn.none small{color:#FFC8C8}
+.emp-btn.none .ed{color:#E6C3C3}
+.emp-btn .dot{position:relative;width:38px;height:38px;flex:none;display:flex;align-items:center;justify-content:center}
+.emp-btn .dot::before{content:"";position:absolute;width:30px;height:30px;border-radius:50%;background:rgba(240,100,100,.45);animation:pulse 1.6s ease-in-out infinite}
+.emp-btn .dot::after{content:"";width:14px;height:14px;border-radius:50%;background:#F57878;position:relative}
+@keyframes pulse{0%,100%{transform:scale(.55);opacity:.9}50%{transform:scale(1.15);opacity:.35}}
+
+.dosar-btn{display:flex;align-items:center;gap:9px;height:58px;padding:0 18px;border-radius:10px;cursor:pointer;font-weight:700;font-size:14px;
+  background:#3A4A46;border:1.5px solid #BF9B59;color:#E8EEF8;transition:background .15s}
+.dosar-btn svg{color:#E3BE73}
+.dosar-btn:hover{background:#4E605A}
+.dosar-btn:active{background:#2E3C38;transform:translateY(1px)}
+
+.sel-title{margin-left:auto;text-align:right}
+.sel-title b{display:block;font-size:21px}
+.sel-title span{font-size:12.5px;color:#B4C3D7}
+
+/* ── cautare ────────────────────────────────────────────── */
+.sel-tools{display:flex;align-items:center;gap:16px;padding:12px 20px 0;flex:none}
+.sel-search{position:relative;width:min(380px,40vw)}
+.sel-search svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--muted)}
+.sel-search .inp{padding-left:36px}
+.sel-hint{font-size:12.5px;color:var(--muted)}
+
+/* ── coloane pe categorii ───────────────────────────────── */
+.sel-cols{flex:1;min-height:0;display:grid;grid-auto-flow:column;grid-auto-columns:minmax(210px,1fr);gap:14px;padding:12px 20px 14px;overflow-x:auto}
+.cat{display:flex;flex-direction:column;min-height:0;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
+.cat-h{padding:12px 14px 10px;border-bottom:3px solid var(--accent);display:flex;align-items:baseline;gap:8px}
+.cat-h b{flex:1;font-size:12px;letter-spacing:.5px;color:var(--accent-dark);text-transform:uppercase}
+.cat-h span{font-size:11.5px;color:var(--muted)}
+.cat-b{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:8px}
+.cat-b .none{font-size:12.5px;color:var(--muted);font-style:italic;text-align:center;padding:10px}
+
+.card{position:relative;display:flex;align-items:flex-start;gap:11px;min-height:66px;padding:12px 30px 12px 12px;border:1.5px solid var(--accent-border);border-top-width:3px;
+  border-radius:9px;background:#fff;cursor:pointer;text-align:left;font-weight:600;font-size:13.5px;line-height:1.35;color:var(--text);transition:background .12s, border-color .12s}
+.card:hover{background:var(--accent-pal)}
+.card .ic{flex:none;color:var(--accent);margin-top:1px}
+.card.on{border-color:var(--accent);background:var(--accent-pal);box-shadow:0 0 0 2px var(--accent) inset}
+.card.on::after{content:"✓";position:absolute;right:8px;bottom:8px;width:18px;height:18px;border-radius:50%;background:var(--accent);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.card[hidden]{display:none}
+
+/* ── subsol ─────────────────────────────────────────────── */
+.sel-foot{display:flex;align-items:center;gap:10px;padding:12px 20px;background:#fff;border-top:1px solid var(--line);flex:none}
+.sel-st{margin-right:auto;font-size:13.5px;color:var(--muted)}
+.sel-st b{color:var(--text)}
+.sel-foot .btn{min-width:120px;justify-content:center}

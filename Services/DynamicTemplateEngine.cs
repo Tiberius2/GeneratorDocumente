@@ -107,14 +107,15 @@ namespace ActAditionalPlugin.Services
         public static string GeneratePreviewDocx(
             DocumentDefinition def,
             Dictionary<string, object> formValues,
-            CommonDocumentValues common)
+            CommonDocumentValues common,
+            Dictionary<string, bool> emptyMarkers = null)
         {
             string tempDocx = Path.Combine(Path.GetTempPath(),
                 string.Format("preview_{0}_{1}.docx", common.PrsnId,
                     Guid.NewGuid().ToString("N").Substring(0, 8)));
 
             File.Copy(def.TemplatePath, tempDocx, true);
-            FillTemplate(tempDocx, def, formValues, common);
+            FillTemplate(tempDocx, def, formValues, common, emptyMarkers);
             return tempDocx;
         }
 
@@ -125,7 +126,8 @@ namespace ActAditionalPlugin.Services
             string docxPath,
             DocumentDefinition def,
             Dictionary<string, object> formValues,
-            CommonDocumentValues common)
+            CommonDocumentValues common,
+            Dictionary<string, bool> emptyMarkers = null)
         {
             using (var doc = WordprocessingDocument.Open(docxPath, true))
             {
@@ -155,6 +157,18 @@ namespace ActAditionalPlugin.Services
 
                 // 3. Build map placeholdere → valori
                 var map = BuildPlaceholderMap(def, formValues, common);
+
+                // 3b. DOAR la previzualizare (formularul web): campurile simple
+                //     necompletate apar ca linie punctata — albastra (optional) sau
+                //     rosiatica (obligatoriu). Listele / tabelele nu sunt afectate.
+                if (emptyMarkers != null)
+                    foreach (var kv in emptyMarkers)
+                    {
+                        string ph = "{{" + kv.Key + "}}";
+                        string cur;
+                        if (!map.TryGetValue(ph, out cur) || string.IsNullOrWhiteSpace(cur) || cur == "0")
+                            map[ph] = kv.Value ? WordHelper.RequiredBlankMarker : WordHelper.BlankLineMarker;
+                    }
 
                 // 4. Replace in tot documentul (body)
                 foreach (var para in body.Descendants<Paragraph>().ToList())
@@ -509,6 +523,9 @@ namespace ActAditionalPlugin.Services
         public string CodInregistrare { get; set; }
         public string TelefonSalariat { get; set; }
         public string EmailSalariat { get; set; }
+        // Din EMPLOYEE: precompleteaza campurile AutoritateEmitenta / DataEliberareCI
+        public string AutoritateEmitentaCI { get; set; }
+        public DateTime DataEliberareCI { get; set; }
 
         // ── Companie ──────────────────────────────────────────
         public string NumeAngajator { get; set; }
@@ -542,6 +559,8 @@ namespace ActAditionalPlugin.Services
             CodInregistrare = string.Empty;
             TelefonSalariat = string.Empty;
             EmailSalariat = string.Empty;
+            AutoritateEmitentaCI = string.Empty;
+            DataEliberareCI = DateTime.MinValue;
             NumeAngajator = string.Empty;
             CIFAngajator = string.Empty;
             ReprezentantLegal = string.Empty;
@@ -583,6 +602,8 @@ namespace ActAditionalPlugin.Services
                 Domiciliu = cimData.Domiciliu,
                 TelefonSalariat = cimData.Telefon,
                 EmailSalariat = cimData.Email,
+                AutoritateEmitentaCI = cimData.AutoritateEmitentaCI,
+                DataEliberareCI = cimData.DataEliberareCI,
                 NumeAngajator = companyData.NumeAngajator,
                 CIFAngajator = companyData.CIFAngajator,
                 ReprezentantLegal = companyData.ReprezentantLegal,

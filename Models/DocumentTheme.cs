@@ -52,6 +52,13 @@ namespace ActAditionalPlugin.Models
             Color.FromArgb(195, 165, 225),
             Color.FromArgb(92, 40, 140));
 
+        /// <summary>Verde — Documente Interne (inainte foloseau albastrul Acte)</summary>
+        public static readonly DocumentTheme Interne = new DocumentTheme(
+            Color.FromArgb(59, 138, 74),
+            Color.FromArgb(232, 244, 234),
+            Color.FromArgb(169, 211, 177),
+            Color.FromArgb(44, 107, 57));
+
         // ── Factory pe nume folder (noul sistem data-driven) ──
         public static DocumentTheme ForCategory(string categoryName)
         {
@@ -74,6 +81,9 @@ namespace ActAditionalPlugin.Models
 
             if (lower.Contains("verbale") || lower.Contains("procese"))
                 return Pv;
+
+            if (lower.Contains("interne"))
+                return Interne;
 
             return Acte;
         }

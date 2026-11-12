@@ -37,7 +37,7 @@ namespace ActAditionalPlugin.Services
         private static List<DocumentCategory> _categories;
         private static string _templatesRoot;
 
-        // ── Ordinea categoriilor în SelectorDialog ─────────────
+        // ── Ordinea categoriilor în selector ──────────────────
         // Ordinea categoriilor corespunde exact numelor de foldere de pe disk
         private static readonly List<string> CategoryOrder = new List<string>
         {

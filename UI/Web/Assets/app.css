@@ -1,0 +1,43 @@
+/* ═══════════════════════════════════════════════════════════
+   Componente comune (selector.html + form.html), peste form.css:
+   selectorul de angajati (picker.js) si ferestrele de mesaj
+   (confirmare inregistrare, succes, eroare).
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── selectorul de angajati ─────────────────────────────── */
+.ov.pp-ov{z-index:80}
+.modal.pp{width:min(1040px,96vw);height:min(720px,92vh);max-height:92vh}
+.modal.pp .m-h{align-items:flex-start}
+.pp-t{font-size:16px;font-weight:700}
+.pp-s{font-size:12.5px;font-weight:400;opacity:.85;margin-top:2px}
+.pp-search{display:flex;align-items:center;gap:12px;padding:12px 20px;border-bottom:1px solid var(--line);background:#fff}
+.pp-search .inp{flex:1;height:42px;font-size:15px}
+.pp-n{font-size:12.5px;color:var(--muted);white-space:nowrap}
+.pp-list{flex:1;overflow:auto;background:#fff}
+.pp-list table{width:100%;border-collapse:collapse;font-size:13.5px}
+.pp-list thead th{position:sticky;top:0;background:#EEF2F8;color:#3E4C63;text-align:left;font-weight:700;font-size:12px;padding:9px 12px;border-bottom:1px solid var(--line);z-index:1}
+.pp-list tbody td{padding:8px 12px;border-bottom:1px solid #EDF1F6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px}
+.pp-list tbody td b{font-weight:600}
+.pp-list tbody tr{cursor:pointer}
+.pp-list tbody tr:hover td{background:var(--accent-pal)}
+.pp-list tbody tr.on td{background:var(--accent);color:#fff}
+.pp-list tr.pp-empty td{text-align:center;color:var(--muted);font-style:italic;padding:30px;cursor:default;background:#fff !important}
+.pp-hint{margin-right:auto;align-self:center;font-size:12px;color:var(--muted)}
+
+/* ── ferestre de mesaj (confirmare / succes / eroare) ───── */
+.ov.msg-ov{z-index:70}
+.modal.msg{width:min(500px,92vw)}
+.msg-top{display:flex;flex-direction:column;align-items:center;gap:8px;padding:24px 24px 6px;text-align:center}
+.msg-ico{width:58px;height:58px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;color:#fff;background:var(--accent)}
+.msg.ok .msg-ico{background:var(--ok)}
+.msg.err .msg-ico{background:var(--danger)}
+.msg-title{font-size:17px;font-weight:700;color:var(--text)}
+.msg-text{color:var(--muted);font-size:14px;white-space:pre-wrap}
+.msg-doc{font-weight:700;color:var(--accent-dark);font-size:15px}
+.msg-rows{margin:12px 24px 4px;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.msg-rows div{display:flex;justify-content:space-between;gap:16px;padding:10px 14px;font-size:14px}
+.msg-rows div + div{border-top:1px solid var(--line)}
+.msg-rows span{color:var(--muted)}
+.msg-rows b{font-weight:700;color:var(--text);letter-spacing:.3px}
+.modal.msg .m-f{margin-top:16px;justify-content:center}
+.modal.msg .m-f .btn{min-width:130px;justify-content:center}

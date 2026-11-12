@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Generator Documente HR</title>
+<link rel="stylesheet" href="form.css">
+<link rel="stylesheet" href="app.css">
+<script>
+  // Diagnostic: orice eroare JavaScript se afiseaza in antet si se trimite la C#
+  window.onerror = function (msg, src, line, col) {
+    var text = msg + " (" + String(src || "").split("/").pop() + ":" + line + ":" + col + ")";
+    var t = document.getElementById("docTitle");
+    if (t) t.textContent = "Eroare: " + text;
+    try { window.chrome.webview.postMessage({ type: "jserror", message: text }); } catch (e) { }
+  };
+</script>
+</head>
+<body>
+  <div class="form-col">
+    <div class="doc-head">
+      <h1><span id="docTitle">Se încarcă…</span><span class="cat" id="docCat"></span></h1>
+      <div class="cod"><span>Cod înregistrare</span><b id="codInreg">—</b></div>
+    </div>
+
+    <div class="scroll" id="scroll">
+      <div class="emp">
+        <div class="avatar" id="avatar"></div>
+        <div class="emp-grid" id="empGrid"></div>
+      </div>
+      <div class="nav" id="nav"></div>
+      <div id="sections"></div>
+    </div>
+
+    <div class="foot">
+      <button class="btn btn-cancel" id="btnCancel">⟵ Anulare</button>
+      <span class="grow"></span>
+      <span class="pv-st" id="pvSt" title="Previzualizarea PDF din dreapta se actualizează automat după o scurtă pauză în completare"><i></i><span>Previzualizare automată</span></span>
+      <button class="btn btn-prev" id="btnPrev">⟳ Previzualizează</button>
+      <button class="btn btn-gen" id="btnGen">⤓ Generează PDF</button>
+    </div>
+  </div>
+
+  <!-- fereastra de editare a unui element de lista ("edit_mode": "dialog") -->
+  <div class="ov" id="ovItem">
+    <div class="modal">
+      <div class="m-h"><span id="itemTitle"></span><button type="button" data-close-item title="Închide">✕</button></div>
+      <div class="m-b" id="itemBody"></div>
+      <div class="m-f">
+        <button class="btn btn-ghost" type="button" data-close-item>Anulează</button>
+        <button class="btn btn-acc" type="button" id="btnSaveItem">✓ Salvează</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- editorul de clauze (Act Aditional) -->
+  <div class="ov" id="ovCl">
+    <div class="modal lg">
+      <div class="m-h"><span>⚙ Editor clauze — acte adiționale</span><button type="button" data-cl-close title="Închide">✕</button></div>
+      <div class="m-b" id="clBody"></div>
+      <div class="m-f">
+        <span class="cl-st" id="clSt"></span>
+        <button class="btn btn-ghost" type="button" data-cl-close>Anulează</button>
+        <button class="btn btn-acc" type="button" id="btnClSave">✓ Salvează clauzele</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- confirmare Da / Nu -->
+  <div class="ov" id="ovConf">
+    <div class="modal sm">
+      <div class="m-h danger"><span id="confTitle">Confirmare ștergere</span></div>
+      <div class="m-b" id="confMsg"></div>
+      <div class="m-f">
+        <button class="btn btn-ghost" type="button" id="confNo">Nu</button>
+        <button class="btn btn-acc" type="button" id="confYes" style="background:var(--danger);border-color:#9E322F">Da</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- mesaje: confirmare inregistrare / succes / eroare -->
+  <div class="ov msg-ov" id="ovMsg">
+    <div class="modal msg" id="msgBox">
+      <div class="msg-top"><div class="msg-ico" id="msgIco"></div><div class="msg-title" id="msgTitle"></div>
+        <div class="msg-text" id="msgText"></div><div class="msg-doc" id="msgDoc"></div></div>
+      <div class="msg-rows" id="msgRows"></div>
+      <div class="m-f" id="msgBtns"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <script src="picker.js"></script>
+  <script src="form.js"></script>
+</body>
+</html>

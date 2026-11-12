@@ -1,19 +1,20 @@
 # CONTEXT — ActAditionalPlugin (Generator Documente HR)
 
-Document pentru un agent nou care preia proiectul în VS Code. Citește-l integral înainte de a modifica ceva. Ultima actualizare: 2026-11-11.
+Document pentru un agent nou care preia proiectul în VS Code. Citește-l integral înainte de a modifica ceva. Ultima actualizare: 2026-11-12 (după „purge”: tot UI-ul e web, codul WinForms vechi a fost șters).
 
 ---
 
 ## 0. TL;DR
 
-- Plugin Softone ERP (C# .NET Framework 4.7.2, WinForms) care generează documente HR (acte adiționale, decizii, cereri, PV-uri, adeverințe) în PDF.
-- **Data-driven:** un document nou = un JSON (formular + hooks) + un DOCX (template Word cu `{{Placeholder}}`). Codul se atinge doar când lipsește o capabilitate (tip de câmp, hook, comportament de listă).
-- Utilizatorul (Tiberiu, dezvoltator, vorbește română) face DOCX-ul. Tu faci JSON-ul, repari DOCX-ul (placeholder-e rupte etc.) și patch-uiești codul minimal când e nevoie.
-- ⛔ **REGULĂ IMPORTANTĂ (2026-11-11): lucrezi DOAR în folderul proiectului** (`D:\Visual Studio Proiecte Vatra\GeneratorDocumente`). Sub nicio formă nu citești, nu modifici, nu muți și nu ștergi nimic în folderul real al șabloanelor (`TemplateDocsPath`, `D:\VATRA DOMNEASCA\...`), în `RecruitmentDocsPath`, în `C:\Program Files (x86)\Soft1\` sau în orice alt loc din afara proiectului — nici pentru verificări. Dacă ai nevoie de un JSON/DOCX, cere-i utilizatorului să-l pună într-un folder din proiect.
-- Se testează funcțional DOAR de utilizator, în Softone (UI-ul nu rulează fără Softone). **Compilarea se poate face local** (VS 2026 / MSBuild), cu ieșirea în `bin/`/`obj/` din proiect (ignorate de git):
+- Plugin Softone ERP (C# .NET Framework 4.7.2) care generează documente HR (acte adiționale, decizii, cereri, PV-uri, adeverințe) în PDF, cu înregistrare în registratură.
+- **Tot UI-ul e web (WebView2)**: selectorul de documente, selectorul de angajați, formularul documentului (cu PDF-ul real alături), editorul de clauze, confirmările. Formularul clasic WinForms (`DynamicForm` & co.) NU mai există.
+- **Data-driven:** un document nou = un JSON (formular + hooks) + un DOCX (template Word cu `{{Placeholder}}`). Codul se atinge doar când lipsește o capabilitate. Schema completă: **`GHID_ADAUGARE_DOCUMENT_NOU.md`** (ține-l la zi când adaugi ceva).
+- Utilizatorul (Tiberiu, dezvoltator, vorbește română) face DOCX-ul. Tu faci JSON-ul, repari DOCX-ul (placeholder-e rupte etc.) și patch-uiești codul când e nevoie.
+- ⛔ **REGULĂ IMPORTANTĂ: lucrezi DOAR în folderul proiectului** (`D:\Visual Studio Proiecte Vatra\GeneratorDocumente`). Sub nicio formă nu citești, nu modifici, nu muți și nu ștergi nimic în folderul real al șabloanelor (`TemplateDocsPath`, `D:\VATRA DOMNEASCA\...`), în `RecruitmentDocsPath`, în `C:\Program Files (x86)\Soft1\` sau în orice alt loc din afara proiectului — nici pentru verificări (nici `ls` în Program Files). Copiile de lucru ale șabloanelor: `Sabloane Pentru redefinirea proiectului\<categorie>\`; utilizatorul le copiază în folderul real.
+- Se testează funcțional DOAR de utilizator, în Softone. **Compilarea se face local**, ieșire în `bin/`/`obj/` (ignorate de git):
   `"C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MSBuild.exe" ActAditionalPlugin.csproj /p:Configuration=Release /p:Platform=x86 /p:FodyGenerateXsd=false /v:minimal`
-  Compilează după fiecare patch și spune explicit ce n-a fost testat în Softone.
-- Preferințe de comunicare: direct, concis, fără narare a gândirii, răspunsuri în română (uneori amestec RO/EN), cerințele vin în loturi într-un singur mesaj. Nu vrea modificări de cod pentru „nume fișier PDF” (respinse de 2 ori — nu le mai propune). Dacă greșești, el editează promptul și regenerează; nu se așteaptă la corecturi în lanț.
+  După fiecare patch: compilează, `node --check` pe JS-urile modificate, verificarea `GetTypes` (§2.1) și spune explicit ce n-a fost testat în Softone.
+- Preferințe: direct, concis, răspunsuri în română, cerințele vin în loturi. Nu vrea modificări de cod pentru „nume fișier PDF” (respinse de 2 ori). Dacă greșești, el editează promptul și regenerează.
 
 ---
 
@@ -21,315 +22,175 @@ Document pentru un agent nou care preia proiectul în VS Code. Citește-l integr
 
 | Element | Detaliu |
 |---|---|
-| Limbaj / runtime | C#, .NET Framework 4.7.2, WinForms |
-| ERP | Softone (Soft1), plugin încărcat ca DLL. DLL-ul instalat stă în `C:\Program Files (x86)\Soft1\Soft1 - Vatra\` și `Soft1 - Ice\`; `Softone.Lib` se referă din `Soft1 - Vatra`. Post-build-ul de copiere e gol în `.csproj` (scos de utilizator) — copierea o face el. |
-| Word | Open XML SDK (`DocumentFormat.OpenXml`) pentru completare; Word Interop (late-bound, `WordHelper.ConvertToPdf`) pentru DOCX → PDF |
-| Preview PDF | PdfiumViewer (în formular, split 40/60) |
-| JSON | Newtonsoft.Json |
-| Variabile de sistem | `TemplateDocsPath` (rădăcina șabloanelor; fallback `Templates/` lângă DLL), `RecruitmentDocsPath` (rădăcina dosarelor PDF ale angajaților) |
-| Companie | VATRA DOMNEASCĂ SRL. Datele companiei vin din ERP (`ErpDataProvider.GetCompanyData`: COMPANY + COMPANYEXT); doar `FunctieReprezentant` vine din `PluginConfig.cs`. Celelalte proprietăți din `PluginConfig` (nume, CIF, IBAN…) nu sunt folosite. |
-| Șabloane reale | `TemplateDocsPath` = `D:\VATRA DOMNEASCA\SemnaturiElectronice - Documents\Sabloane Acte si Decizii` (folder sincronizat, folosit în producție — ⛔ INTERZIS: nu-l accesa deloc, vezi §0) |
-| Git | ramura de lucru `redefinire-proiect`, ramura principală `master` |
+| Limbaj / runtime | C#, .NET Framework 4.7.2, WinForms doar ca gazdă pentru WebView2 + PdfiumViewer |
+| ERP | Softone (Soft1), plugin încărcat ca DLL. Instalat în `C:\Program Files (x86)\Soft1\Soft1 - Vatra\` și `Soft1 - Ice\` (copierea o face utilizatorul) |
+| UI | Microsoft.Web.WebView2 1.0.4314.35 (Core + WinForms, împachetate de Costura); paginile în `UI\Web\Assets` (EmbeddedResource) |
+| Word | Open XML SDK pentru completare; Word Interop late-bound pe fir STA dedicat (`WordHelper`) pentru DOCX → PDF |
+| Preview PDF | PdfiumViewer (dreapta formularului, `FitBest`) |
+| JSON | Newtonsoft.Json (⚠️ versiunea veche din Softone, §2.1) |
+| Variabile de sistem | `TemplateDocsPath` (șabloanele; fallback `Templates\` lângă DLL), `RecruitmentDocsPath` (dosarele PDF ale angajaților) |
+| Companie | VATRA DOMNEASCĂ SRL; datele din ERP (`ErpDataProvider.GetCompanyData`: COMPANY + COMPANYEXT); doar `FunctieReprezentant` e în `PluginConfig.cs` |
+| Git | ramura de lucru `redefinire-proiect`, principală `master` |
 
-Constrângeri .NET/Softone importante:
-- **Fără metode generice proprii cu constrângeri de tip** (ex. `GetAncestor<T>`) — provoacă erori de încărcare a DLL-ului în Softone. Folosește `as`-cast și metode negenerice (ex. `GetParentTableRow()`). Apelurile LINQ/OpenXML obișnuite (`Descendants<Text>()`) sunt OK.
-- Sintaxă C# moderată (pattern matching `is X x` e deja folosit), dar rămâi conservator.
-- Fișierele `.cs` din proiect sunt în general **UTF-8 cu BOM și CRLF**. Excepții: `PluginEntry.cs` și `WordHelper.cs` sunt fără BOM, iar `WordHelper.cs` e LF pe disc. Păstrează formatul existent al fiecărui fișier (altfel git vede tot fișierul modificat).
-- JSON-urile se salvează UTF-8 fără BOM. Diacriticele sunt permise în `title`, `label`, `options` etc. În **placeholder-ele din DOCX NU se folosesc diacritice**.
-- Acces la dataset Softone: `ds[i, "COLOANA"]`. SQL se rulează prin `BulkContext.XSupport` (`GetSQLDataSet()` pentru citire, `ExecuteSQL()` pentru scriere).
+Instalare: `ActAditionalPlugin.dll` + **`WebView2Loader.dll` (x86, fișier separat — utilizatorul NU vrea să fie inclus în DLL)**; target-ul `CopyWebView2Loader` îl copiază la build în `bin\x86\Release`. Pe PC: WebView2 Runtime (Evergreen) + Word.
+
+### 2.1 Capcane Softone / WebView2 (obligatoriu de respectat)
+- ⚠️ **Fără `async`/`await` și fără `struct`-uri cu câmpuri de tip WebView2.** Softone face `GetTypes()` pe tot DLL-ul ÎNAINTE ca resolver-ul Costura să existe; un state machine async cu `TaskAwaiter<CoreWebView2Environment>` → „Unable to load one or more of the requested types” la pornirea Softone. Folosește `ContinueWith(..., TaskScheduler.FromCurrentSynchronizationContext())` (vezi `WebHostForm.StartWebView`). Tipurile WebView2 sunt OK ca parametri, variabile locale, câmpuri / proprietăți în clase.
+  **Verificare după build:** în PowerShell pe 32 de biți, `[Reflection.Assembly]::LoadFrom("...\bin\x86\Release\ActAditionalPlugin.dll").GetTypes()` — singura `LoaderException` acceptată e `Softone.Lib`.
+- ⚠️ **Newtonsoft.Json vechi în procesul Softone** → `MissingMethodException` pentru API nou (ex. `JToken.ToString(Formatting)`). Doar: `JObject.Parse`, `JToken.ToString()`, indexere, conversii explicite `(string)tok`, `JsonConvert.SerializeObject/DeserializeObject`, `[JsonProperty]`.
+- ⚠️ **NU folosi `CoreWebView2EnvironmentOptions`** — cu loader-ul din folderul pluginului dă „Class not registered”. Argumentele de pornire se dau prin variabila de mediu `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS`, setată doar pe durata `CreateAsync` (`WebViewSupport.CreateEnvironment(true)` → `--lang=ro-RO`, folder `%LOCALAPPDATA%\GeneratorDocumente\WebView2\UserDataRo`). Dacă pornirea eșuează (ex. 0x8007139F = proces WebView2 rămas cu alți parametri), `WebHostForm.StartFailed` recreează controlul și reia fără argumente pe `UserData`.
+- `--lang=ro-RO` NU schimbă formatul input-urilor native de dată → pagina folosește elementul propriu `<ro-date>` (§4).
+- Erorile din handler-ele WebView2 sunt înghițite în tăcere → `WebHostForm` le afișează (fereastra „diagnostic”); erorile JS vin prin mesajul `jserror`. DevTools (F12) e activ.
+- Dialogurile modale / operațiile lungi pornite din mesajele paginii merg prin `BeginInvoke` (fără bucle de mesaje imbricate în evenimentele WebView2).
+- **Fără metode generice proprii cu constrângeri de tip** (ex. `GetAncestor<T>`) — erori de încărcare în Softone. LINQ / OpenXML obișnuit e OK.
+- Encoding: `.cs` UTF-8 **cu BOM** + CRLF (excepții: `PluginEntry.cs` fără BOM; `WordHelper.cs` fără BOM, LF). Paginile web și JSON-urile: UTF-8 **fără BOM** (web: CRLF; JSON-urile de lucru: LF, indentare 2). Păstrează formatul fiecărui fișier.
+- SQL: `XSupport.GetSQLDataSet()` (citire, `ds[i, "COLOANA"]`), `ExecuteSQL()` (scriere), prin `BulkContext.XSupport`.
 
 ---
 
-## 2. Structura repository-ului
+## 2. Arhitectura
 
 ```
-ActAditionalPlugin.csproj / GeneratorDocumente.slnx / packages.config
-PluginEntry.cs                 // puncte de intrare Softone
-Models/
-  DocumentDefinition.cs        // DocumentDefinition, SectionDefinition, FieldDefinition, ItemFieldDefinition (schema JSON)
-  PluginConfig.cs              // TemplatesRoot (env TemplateDocsPath) + date companie hardcodate
-  PersonInfo.cs                // persoana selectabilă (person_picker)
-  ClauzeConfig.cs              // doar pentru Act Adițional (clauze_editor)
-Services/
-  DocumentRegistry.cs          // scanează TemplateDocsPath: categorie = subfolder, document = *.json + *.docx; CategoryOrder
-  DynamicTemplateEngine.cs     // FillTemplate: placeholder-e, liste dinamice, hooks on_generate, PDF, folder angajat
-  HookRegistry.cs              // hooks (vezi §6)
-  WordHelper.cs                // MergeAndReplace, colorare linii punctate, conversie PDF
-  RegistraturaService.cs       // cod înregistrare YYddd/NR + inserturi în tabele specifice
-  ErpDataProvider.cs           // SQL: date angajat/CIM/companie (PRSN, PRSEXTRA, DEPART, COMPANY, COMPANYEXT)
-  ClauzeService.cs, BulkContext.cs
-UI/
-  SelectorDialog.cs            // alege angajat + document (carduri pe categorii), buton „Dosar Personal”
-  DynamicForm.cs               // formularul generat din JSON + DynamicListRow, CheckTextBox, DateRangeBox, NoScrollComboBox
-  DocumentTheme.cs             // teme de culoare pe categorie
-  PersonPickerDialog.cs, ClauzeEditorDialog.cs, PunctModificareControl.cs, ConfirmareDialog.cs, SuccessDialog.cs
-Resources/                     // png-uri (inclusiv dosar_personal.png), logo, .docx legacy
-GHID_ADAUGARE_DOCUMENT_NOU.md  // ghid de bază (secțiunile de mai jos îl actualizează)
+PluginEntry.cs        S1 (xSupp static), ProgramGeneral (cmd 4000502, [GENERAL]), Program (cmd 4000501, [PRSNIN],
+                      citește PRSN-ul curent) → AppLauncher.Launch (o instanță: mutex + aducere în față;
+                      AppServices.Initialize + LoadPersons pe firul Softone; SelectorDialog pe fir STA propriu;
+                      la final ShutdownWordApp + BulkContext.Reset)
+Models/               DocumentDefinition (DOAR proprietățile folosite de C#), PersonInfo, ClauzeConfig,
+                      DocumentTheme (culori pe categorie), PluginConfig (TemplatesRoot, FunctieReprezentant)
+Services/             AppServices (inițializare comună), DocumentRegistry, DynamicTemplateEngine (DOCX),
+                      WordHelper, DocumentGenerationService, RegistraturaService, HookRegistry,
+                      ErpDataProvider (companie, CIM, LoadPersons), ClauzeService, BulkContext
+UI/SelectorDialog.cs  fereastra principală (selector.html) — numele clasei + ctor fără parametri rămân pentru
+                      Softone „Dll Form” (ActAditionalPlugin.dll;SelectorDialog), care inițializează singur serviciile
+UI/Web/WebHostForm.cs baza ferestrelor web: WebView2, pagini din resurse la https://app.generator/,
+                      mesaje JSON (ready→SendInit, ping, jserror; restul → HandleMessage), Post, ShowError
+UI/Web/WebDocumentForm.cs  formularul unui document: stânga form.html (40%), dreapta PDF (60%)
+UI/Web/PersonList.cs  persoanele → JSON pentru picker.js + valorile `maps` (inclusiv `:upper`)
+UI/Web/Assets/        form.html|css|js, selector.html|css|js, picker.js (selectorul de angajați, comun),
+                      app.css (picker + ferestrele de mesaj, comun; se încarcă după form.css)
 ```
 
-Puncte de intrare Softone: `S1` (static, `xSupp`, `[WorksOn("GENERAL")]`), `ProgramGeneral` cmd 4000502 `[GENERAL]`, `Program` cmd 4000501 `[PRSNIN]`; Form DLL: `ActAditionalPlugin.dll;SelectorDialog` (constructor fără parametri).
-
-Șabloanele (JSON + DOCX) NU stau în repo-ul de cod, ci în folderul indicat de `TemplateDocsPath` (structura din §3). Tu lucrezi doar pe copii pe care utilizatorul le pune într-un folder din proiect — întreabă-l unde; nu accesa niciodată folderul real (§0).
-
----
-
-## 3. Fluxul aplicației
-
-1. `DocumentRegistry.Initialize(TemplatesRoot)` scanează subfolderele. **Categoria = numele folderului.** Fiecare `*.json` valid (cu `title`, `template_file` care există) devine un `DocumentDefinition`. Documentele se sortează după `order` (>0 primele, crescător), restul alfabetic. Categoriile se sortează după `CategoryOrder` (hardcodat în `DocumentRegistry.cs`); cele necunoscute merg la final.
-2. `SelectorDialog`: utilizatorul alege angajatul (buton custom-painted: badge roșu pulsând când nu e ales nimeni; albastru cu inițiale după selecție), apoi cardul documentului. Buton „Dosar Personal” (lângă angajat, apare doar cu angajat selectat) deschide folderul PDF al angajatului.
-3. `DynamicForm` construiește formularul din `sections[]`, aplică `depends_on`, rulează hooks `on_open` / `on_change`.
-4. La „Generează PDF” (`DynamicForm.OnGenerate`): validare (`required`), hooks `on_generate`, recalculare cod, confirmare, apoi **întâi PDF-ul, abia apoi registratura**:
-   - codul se recalculează chiar înainte de generare; după generare se verifică `RegistraturaService.CodExista` — dacă între timp codul a fost luat de altcineva, PDF-ul se șterge și se regenerează cu codul următor (max 3 încercări);
-   - `Inregistreaza` (CCCVREGISTRATURA + CCCVDOCAUDIT) + `InregistreazaTabelaSpecifica`; dacă înregistrarea eșuează, PDF-ul generat se șterge;
-   - la orice eroare formularul rămâne deschis, codul din antet se reactualizează, iar o nouă încercare nu dublează înregistrarea.
-   După succes aplicația revine la `SelectorDialog`. Rămâne o fereastră de câteva milisecunde între verificare și INSERT (fără index unic în DB nu se poate elimina complet).
-5. **Nume PDF:** `{Titlu}_{CodInregistrare}_{dd-MM-yyyy}.pdf`, cu `SanitizeFileName` (`/` → `-`). Titlul din JSON apare identic în selector, în registratură și în numele fișierului. Titlurile au diacritice și asta e intenționat.
-   ⚠️ **Titlul + paginarea sunt folosite de semnăturile electronice:** `{TemplateDocsPath}\Sabloane Semnaturi Electronice\*.json` (JSON-uri ale altui sistem, ignorate de `DocumentRegistry` fiindcă n-au `title`) găsesc PDF-urile după tipar de nume (`FileSystemBlock.FilePattern`, ex. `"Cerere Demisie fără Preaviz_*.pdf"`) și pun semnăturile la coordonate fixe (`Page`, `X/Y/W/H`). Redenumirea unui titlu sau schimbarea paginării DOCX poate rupe semnarea — întreabă utilizatorul de șablonul de semnătură corespunzător (nu-l căuta tu în folderul real). Fără șablon de semnătură (2026-11-11): Adeverință de Vechime, Convocare Cercetare, Decizie Constituire Comisie, PV Cercetare.
-6. **Folder angajat:** `RecruitmentDocsPath\{PrsnId} - {Nume}\`. Folderul existent se caută după prefixul `"{PrsnId} - "` (`DynamicTemplateEngine.ResolvePersonFolder(prsnId, numeSalariat, createIfMissing)`), NU după nume (numele se poate schimba în Softone după parsarea buletinului, cu diacritice). Dacă nu există, se creează cu numele curent. Metoda e folosită și de butonul „Dosar Personal”.
+### 2.2 Fluxul
+1. `AppServices.Initialize`: `RegistraturaService`, `HookRegistry.RegisterAll`, `DocumentRegistry.Initialize(PluginConfig.TemplatesRoot)`, date companie, `BulkContext`. `ErpDataProvider.LoadPersons` = toți angajații activi (PRSN + PRSEXTRA + DEPART + SPECIALTY).
+2. **Selectorul** (`SelectorDialog` / `selector.html`): butonul angajatului (roșu pulsând = neales; albastru cu inițiale = ales) deschide selectorul web de angajați; „Dosar personal” deschide folderul angajatului; documentele sunt coloane pe categorii (culorile din `DocumentTheme`), cu căutare. Clic = alege, dublu-clic / Enter / „Continuă” = deschide (fără angajat → se deschide întâi selectorul de angajați).
+3. `openDocument` → C# construiește `CommonDocumentValues` (CIM-ul angajatului e ținut în cache) + codul de înregistrare și deschide **`WebDocumentForm` modal PESTE selector**; la închidere, `documentClosed` resetează documentul ales (angajatul rămâne).
+4. **Formularul** (`form.html`): `init` = JSON-ul brut al documentului + valori inițiale (precompletare ERP + hooks `on_open`) + angajat + persoane + clauze + temă + cod. Modificările → `change` (hooks `on_change`); data de înregistrare → `regDate` → `cod`; previzualizarea automată (§4).
+5. **Generare:** `generate` → valori + hooks `on_generate` + cod proaspăt → `confirmGenerate` (fereastra web de confirmare cu cod + dată) → `generateConfirmed` → `DocumentGenerationService.GenerateAndRegister`: **întâi PDF-ul, apoi registratura**; după PDF se verifică `RegistraturaService.CodExista` (cod luat între timp → PDF șters și regenerat cu codul următor, max 3); dacă înregistrarea eșuează, PDF-ul se șterge → `generated` (fereastra de succes) → `close`. Erorile → `generateDone {error}` (fereastră de eroare în pagină), formularul rămâne deschis, o nouă încercare nu dublează înregistrarea.
+6. **Nume PDF:** `{Titlu}_{CodInregistrare}_{dd-MM-yyyy}.pdf` (`SanitizeFileName`, `/` → `-`). **Titlurile JSON sunt fără diacritice** (excepție: „Acord Semnătură Electronică”).
+   ⚠️ **Titlul + paginarea sunt folosite de semnăturile electronice** (`{TemplateDocsPath}\Sabloane Semnaturi Electronice\*.json`, ignorate de `DocumentRegistry` fiindcă n-au `title`): găsesc PDF-ul după tipar de nume (`FilePattern`, ex. `"Cerere Demisie fara Preaviz_*.pdf"`) și pun semnăturile la coordonate fixe. Redenumirea unui titlu sau schimbarea paginării poate rupe semnarea — avertizează și întreabă de șablonul de semnătură. Fără șablon de semnătură (2026-11-11): Adeverință de Vechime, Convocare Cercetare, Decizie Constituire Comisie, PV Cercetare. Pe 2026-11-12 18 titluri au pierdut diacriticele; tiparele de nume ale semnăturilor au fost actualizate de utilizator.
+7. **Folder angajat:** `RecruitmentDocsPath\{PrsnId} - {Nume}\`, găsit după prefixul `"{PrsnId} - "` (`DynamicTemplateEngine.ResolvePersonFolder`), nu după nume; creat dacă lipsește.
+8. Word: o instanță invizibilă refolosită, pe firul `WordThread`; `ShutdownWordApp` la închiderea selectorului (închide Word doar dacă nu are documente deschise).
 
 ---
 
-## 4. Schema JSON (stare curentă, inclusiv extensiile din sesiunile recente)
+## 3. Mesaje pagină ↔ C#
 
-### 4.1 Root
-`title`, `template_file`, `registratura` (bool), `registratura_date_field` (cheia unui câmp `date` → devine data de înregistrare și intră în numele PDF), `registratura_tip_doc_pk` (int), `order` (int), `sections[]`, `hooks[]`.
-Nu există `category`, `id` sau `tip_doc_pk` la root. Câmpurile folosesc `key` (nu `name`).
-
-### 4.2 Secțiune
-`title`, `height` (px; pentru liste cu `auto_height` e ignorat practic), `fields[]`, **`depends_on` / `depends_value`** (NOU): secțiunea apare în formular doar când condiția e adevărată; cele de dedesubt urcă (`ReflowSections` în `DynamicForm`). Nu afectează documentul generat.
-
-### 4.3 Câmp (`fields[]`)
-`key`, `label`, `type`, `label_width_percent` (suma pe rând = 100), `required`, `placeholder`, `default`, `options` (combo), `maps` (person_picker), `initial_rows` + `item_fields` (dynamic_list), `depends_on` / `depends_value`.
-
-Tipuri: `text`, `multiline` (140px), `date` (dd.MM.yyyy), `datetime` (cu oră, `dd.MM.yyyy HH:mm`), `readonly`, `number` (0–999), `combo`, `person_picker`, `dynamic_list`, `clauze_editor`.
-`options_sql` (combo din SQL) și tipul `expand_table_row` (+ `table_marker`, `ExpandTableRows`) au fost **eliminate** pe 2026-11-11: nu erau implementate în formular și niciun JSON nu le folosea. Un JSON care le-ar conține tot se încarcă (Newtonsoft ignoră proprietățile necunoscute), dar fără efect.
-
-`person_picker`: la selecție, `{{CheiaPickerului}}` = `NumeComplet`; un `maps` pe aceeași cheie (ex. `"NumePrenumeInlocuitor": "NumeComplet:upper"`) are prioritate. Valoarea pickerului stă în `_formValues` (controlul e doar un buton) și nu mai e ștearsă la `on_change`; `required` pe picker verifică selecția.
-
-`depends_on` / `depends_value`: editabilitate dinamică (câmpul devine disabled/readonly când condiția nu e îndeplinită; AND cu `|`, ex. `"depends_on":"A|B","depends_value":"x|y"`). Câmpurile `required` inactive sunt ignorate la validare. Se (re)evaluează după `on_open` și `on_change` (`ApplyFieldDependencies`).
-Combo-urile declanșează `on_change` (`SelectedIndexChanged → RunHooks("on_change")`).
-`SetDefault` acceptă valorile speciale `{year}` și `{today}`.
-
-### 4.4 Opțiuni pe `dynamic_list` (NOU)
-| Opțiune | Efect |
-|---|---|
-| `collapsible` | rândurile se restrâng/extind (click pe antet); antet cu număr + rezumat; la adăugare, celelalte se restrâng (acordeon) |
-| `summary_fields` | lista cheilor din `item_fields` afișate în antet când rândul e restrâns (separate prin ` · `) |
-| `auto_height` + `max_height` | panoul listei își ajustează înălțimea după conținut (max implicit 560); secțiunile de dedesubt se reașază |
-| `hide_header` | nu desenează sub-antetul propriu al listei (titlul secțiunii e deja deasupra; evită titlul dublu) |
-| `add_button_label` | textul butonului „+ …” (implicit „Adaugă ” + label); lățimea butonului se potrivește pe text |
-| `edit_mode: "dialog"` (2026-11-11) | elementele se adaugă/editează într-o fereastră separată (`ListItemDialog`, câmpurile din `item_fields` cu `group`-urile lor, mai aerisite); în formular apar doar carduri needitabile (`ListItemCard`): restrânse implicit (număr + `summary_fields`), extensibile pentru a vedea toate valorile, cu „✎ Editează” și „✕” (cu confirmare). Lista pornește GOALĂ (`initial_rows`/`collapsible` ignorate). „Anulează” în dialog nu modifică elementul (se editează o copie — `DynamicListRow.CopyStateFrom`). Funcționează cu `auto_height`/`max_height`, `hide_header`, `required`. |
-| `dialog_title` | titlul ferestrei pentru `edit_mode: "dialog"` (implicit = `label`); prefixat automat cu „Adăugare — ” / „Editare — ” |
-| `initial_items` | listă de elemente precompletate la deschidere (`[{ "cheie_item": "valoare", ... }]`); înlocuiește `initial_rows`. Merge în ambele moduri. Valorile pot conține token-uri cu datele angajatului: `{NumeSalariat}`, `{CNP}`, `{Functie}`, `{NumeDepartament}`, `{NrCim}`, `{DataCim}`, `{SerieCI}`, `{NrCI}`, `{Domiciliu}`, `{today}` (`DynamicForm.ResolveCommonTokens`). Datele se dau `dd.MM.yyyy`; valorile care nu se potrivesc (opțiune inexistentă, dată goală) sunt ignorate. |
-
-Cardurile listei `dialog`: iconiță de extindere = săgeată simplă „V” (jos = restrâns, sus = extins; modelul ales de utilizator, fără chenar), titlu (rezumatul) bold + UPPERCASE. Sub o listă cu `auto_height` se lasă 40px spațiu până la secțiunea următoare (`ReflowSections`). Panoul listei `dialog` e o casetă albă cu chenar subțire (ca secțiunile normale, `PaintBorder`), iar cardurile stau în interior cu margini egale (`DialogListPadX`=12, `DialogListPadY`=10, `DialogListGap`=8) — fără chenarul mov dublu al listelor clasice.
-
-Fără aceste opțiuni listele se comportă exact ca înainte (documentele vechi nu sunt afectate). O listă cu `label` gol nu mai desenează antet.
-
-### 4.5 `item_fields[]` (câmpurile dintr-un rând de listă)
-`key`, `label`, `type`, `width_percent` (rândurile se umplu până la 100, apoi trec pe rândul următor), `placeholder`, `maps`, `options`, `default`, `max`, `decimals`, `format`, `check_label`, `group`.
-
-Tipuri suportate în rând:
-- `text` (cu `placeholder` gri sau `default`), `person_picker` (cu `maps`)
-- `number`: implicit 0–9999, zecimale 0. Cu `max`, `decimals`, `format` (ex. `"#,##0.##"`, formatat cu cultura `ro-RO` → `4.325`).
-- `combo`: `options`, `default`. Folosește `NoScrollComboBox` (stil standard cu chenar, fără schimbare de valoare la scroll).
-- `date`: DateTimePicker `dd.MM.yyyy`. **`maps`** pe `date` = „cheie placeholder → format .NET” și împarte data în bucăți per rând, ex. `{"AnulMutatie":"yyyy","LunaMutatie":"MM","ZiMutatie":"dd"}` (cultura `ro-RO`).
-- `date_range`: două date, valoare `"dd.MM.yyyy - dd.MM.yyyy"` (la schimbarea începutului, sfârșitul se aliniază dacă era mai mic).
-- `check_text`: bifă + câmp text activ doar când e bifat; valoare = textul dacă e bifat, altfel `""`. `check_label` = textul bifei (implicit „Da”).
-- `group`: câmpul începe un rând nou și deasupra apare un mic titlu cu linie separatoare (valabil până la următorul `group`).
-
-- `on_select` (pe `combo`): `{ "Opțiune": { "cheie_item": "valoare", ... } }` — la alegerea opțiunii se completează alte câmpuri din ACELAȘI rând (token-uri ca la `initial_items`). Combo-urile și datele se setează mereu; text / number / check_text doar dacă sunt goale (nu suprascrie ce a scris operatorul). Se aplică și la crearea unui element nou, pentru opțiunea implicită (`ApplyOnSelectAll`); NU se aplică la `initial_items` și la copierea pentru editare.
-
-Automat în orice rând: `{{NrCrt}}` = numărul rândului (disponibil în clone, dar nu e marker de expandare).
-
-### 4.6 Valori pentru `maps` la `person_picker`
-`NumeComplet`, `Nume`, `Prenume`, `CNP`, `Functie`, `CodCor`, `NrCim`, `DataCim`, `NumeDepartament`, `SerieCI`, `NrCI`, `Domiciliu`, `NumeComplet_Functie`; sufix `:upper` pentru majuscule (ex. `"NumeComplet:upper"`) — **doar la nivel de formular**; în `item_fields` (`DynamicListRow`) sufixul nu e suportat și dă valoare goală. În `dynamic_list`, valorile mapate fără control propriu se păstrează în `_extraValues` și sunt disponibile ca placeholder per rând.
-
----
-
-## 5. Placeholder-e automate (nu se pun în `fields[]`)
-
-Angajat (persoana selectată): `NumeSalariat`, `CNP` (PRSN.AFM), `Functie` (PRSN.SOTITLENAME), `NumeDepartament` (JOIN DEPART), `NrCim` (string, din `PRSEXTRA.CCCVARCHAR05` — mapare ulterioară; vechiul `NUM03` nu mai e valabil), `DataCim` (dd.MM.yyyy), `SerieCI` / `NrCI` (parsate din `PRSN.IDENTITYNUM` prin `ParseIdentityNum`), `Domiciliu` (`PRSN.ADDRESS`), `NumarTelefonSalariat` (`PRSN.MOBILEPHONE`), `EmailSalariat` (`PRSN.EMAIL`), `CodInregistrare`.
-Companie: `NumeAngajator`, `CIFAngajator`, `ReprezentantLegal` (COMPANYEXT ACCTOFFICE=2), `FunctieReprezentant` (**din `PluginConfig`, hardcodat**), `AdresaCompanie`, `ZipCompanie`, `NrRegComertului`, `IbanCompanie`, `NrTelefonCompanie`, `EmailCompanie`, `WebsiteCompanie`. (Telefon/email de angajat există; cele de companie sunt separate.)
-Din formular: orice `key` din `fields[]`, plus cheile din `maps` și din hooks (`target_field`).
-**`DataInreg` NU e automat.** Dacă header-ul DOCX are `{{DataInreg}}`, în JSON trebuie un câmp `date` cu `key: "DataInreg"`, iar `registratura_date_field` pointează la el (cum e la Adeverință).
-`CodInregistrare` apare automat în header-ul formularului — nu se pune în `sections`.
-`PrePopulateReadonlyCommonFields` (DynamicForm) precompletează câmpuri **readonly** ale căror `key` coincide cu o valoare comună (NumeAngajator, AdresaCompanie, NrRegComertului, CIFAngajator, ReprezentantLegal, NumeSalariat, CNP, Functie, NumeDepartament, NrCim, SerieCI, NrCI, Domiciliu, TelefonSalariat/EmailSalariat). Folosește-l pentru formulare „doar confirmare”.
-
----
-
-## 6. Hooks (`hooks[]`: `{ "on": "...", "handler": "...", "params": {...} }`)
-
-Evenimente: `on_open`, `on_change`, `on_generate`. Ordinea din JSON contează la `on_generate` (ex. `ConcatList` înainte de `BlankIfNotEquals` care golește rezultatul).
-
-| Handler | Params | Efect |
+| Fereastră | Pagina → C# | C# → pagina |
 |---|---|---|
-| `SetDefault` | `field`, `value` (`{year}`, `{today}`) | setează câmpul la deschidere dacă e gol |
-| `SqlOnOpen` / `SqlOnGenerate` | `query` (`{PrsnId}`, `{CompanyId}`), `column`, `target_field` | rulează SQL, pune rezultatul în câmp |
-| `CalcDataSfarsit` | `start_field`, `luni_field`, `target_field` | start + luni |
-| `CalcDataSfarsitDinCNP` | `cnp_field`, `ani_field`, `target_field` | data nașterii din CNP + ani |
-| `CalcPerioadaSuspendare` | `ani_field`, `target_field` | 1 → „1 an”, 2 → „2 ani” |
-| `ConcatList` | `source_field` (cheia listei), `item_key` (cheia din `item_fields`, NU cheia pickerului), `target_field`, `separator`, `distinct` ("true") | concatenează valori dintr-o listă |
-| `InjectArticoleFinal` | — | calculează `{{ArticolCompartiment}}` / `{{ArticolContestatie}}` (ultimul Art.N + 1/+2); rulează în `FillTemplate` prin `RunSingleHook` |
-| `SetIfEquals` | `source_field`, `equals`, `target_field`, `value_if_true`, `value_if_false` | setează o valoare după egalitate (ex. bifă `▣`/`□`) |
-| `BlankIfNotEquals` | `source_field`, `equals`, `target_field`, `blank` | dacă sursa ≠ `equals`, suprascrie ținta cu `blank` (linie punctată albastră) |
-| `CalcZileLucratoare` | `start_field`, `end_field`, `target_field` | zile lucrătoare (exclude weekend) |
-| `FormatPerioada` | `start_field`, `end_field`, `tip_field`, `tip_ore_value`, `target_field` | combină două câmpuri `datetime` într-un interval text, cu/fără oră |
+| Comun (`WebHostForm`) | `ready`, `ping`, `jserror` | `pong` |
+| Selector | `openDocument {doc, prsnId}`, `openFolder {prsnId}`, `close` | `init {categories[{name, theme, docs[{id,title}]}], persons, prsnId}`, `documentClosed {generated}` |
+| Formular | `cancel`, `close`, `change`, `regDate`, `preview {values, lists, clauze, required, auto}`, `generate`, `generateConfirmed`, `generateCancelled`, `pickPerson {requestId, prsnId, maps}`, `loadClauzeConfig`, `saveClauzeConfig {config}` | `init`, `changed`, `cod`, `previewDone {ok, auto, message}`, `confirmGenerate`, `generated`, `generateDone {error}`, `personPicked`, `clauze`, `clauzeConfig`, `clauzeSaved` |
 
-Convenții vizuale în documentul generat:
-- **Linie punctată albastră:** valoarea exactă `_ _ _ _ _ _ _ _ _ _ _ _ _ _ _` (`WordHelper.BlankLineMarker`) se colorează `0070C0`. Se obține cu `BlankIfNotEquals`. Regula utilizatorului: textul variantelor/paragrafelor neselectate apare ÎNTOTDEAUNA în document; doar câmpurile necompletate devin linii punctate.
-- **Bife:** `□` (nebifat) și `▣` (bifat) ca TEXT (utilizatorul le vrea unicode, cu „căsuță încărcată”, nu pătrat plin `■`).
+`BuildFormValues` convertește valorile paginii în formatul motorului: date `dd.MM.yyyy`, `maps` pe date (bucăți An/Lună/Zi, cultura ro-RO), `date_range` „a - b”, `check_text` doar dacă e bifat, `number` cu `format` ro-RO, `NrCrt`, elemente invalide (primul câmp gol) sărite, clauze → `ModificareNr/ModificareReferinta/ModificareText`, `MentiuniDocument`.
 
 ---
 
-## 7. Reguli pentru template-urile DOCX (capcane reale întâlnite)
+## 4. Pagina formularului (`form.js`) — reguli de randare și comportament
 
-1. **Placeholder rupt.** `MergeAndReplace` concatenează textul tuturor run-urilor directe ale paragrafului, deci un `{{...}}` rupt în mai multe run-uri SE ÎNLOCUIEȘTE corect. Rămâne neînlocuit doar dacă e în run-uri imbricate (`w:hyperlink`, `w:ins`, `w:sdt`, `w:smartTag`), dacă are acolade rupte (`{{X}`) sau spații în interior (`{{ DataPV }}` — a existat la PV Autovehicul, corectat).
-2. **`WordHelper.MergeAndReplace` reconstruiește paragraful din text.** Într-un paragraf care conține `{{...}}` se PIERD: `<w:br/>` (salturi de rând), `<w:tab/>`, desene/textbox-uri, orice run non-text. (Un `br`/`tab` la începutul sau sfârșitul paragrafului se pierde fără efect vizibil major — cazul cererilor din Documente Interne; la Concediere Disciplinară `br`-ul din mijloc face ca motivele să urce pe rândul cu „…reprezentate de:” — acceptat de utilizator.) Soluții aplicate: salt de rând → paragrafe separate în celulă; tab → `w:ind firstLine` în `pPr`; desenele/textbox-urile se țin în paragrafe FĂRĂ placeholder (ex. textbox-ul „paine sanatoasa” a fost mutat în paragraful titlului). Formatarea run-ului (bold, culoare, caps) se păstrează pe valoarea înlocuită (per caracter, prin `posToRpr`).
-3. **Liste numerotate native (`<w:numPr>`)** înainte de un placeholder mănâncă vizual bifa/primul run în MS Word. Folosește placeholder-ul ca singur „bullet”.
-4. **Majuscule în PDF:** aplică efectul de font „All caps” (`<w:caps/>`) pe run-ul placeholder-ului. NU folosi Shift+F3 / Change Case — schimbă textul în `{{TIPMUTATIE}}` și placeholder-ul nu se mai înlocuiește.
-5. **Liste dinamice în tabele:** rândul-șablon se clonează per item. `ExpandParagraphOrRow` caută primul paragraf cu marker `{{cheie}}` pentru fiecare `item_field` și cheie mapată din `maps`. Marker-ul trebuie să fie singur pe paragraf/rând (nu amestecat cu alt text în același paragraf pentru expandare de paragrafe). Dacă e în tabel, se clonează `TableRow`.
-   - **Grupuri vMerge (NOU):** dacă rândul-șablon deschide celule unite vertical (`vMerge restart`), se clonează tot grupul (rândul + rândurile următoare care doar continuă unirea). Exemplu: celula de dată împărțită în 3 rânduri An/Lună/Zi la Adeverință; placeholder-ele `{{AnulMutatie}}`, `{{LunaMutatie}}`, `{{ZiMutatie}}` stau în cele 3 rânduri ale grupului.
-   - **Listă goală** (niciun rând valid): paragraful / rândul-șablon (sau grupul vMerge) se ELIMINĂ, ca să nu rămână `{{Cheie}}` ca text. Excepții, ca DOCX-ul să rămână valid: dacă rândul e singurul din tabel sau paragraful e singurul din celulă, se păstrează cu valorile golite.
-   - Act Adițional folosește `clauze_editor` (cheile fixe `ModificareNr`/`ModificareReferinta`/`ModificareText`), expandat tot prin `ExpandDynamicLists`.
-6. Tabelele „floating” (`tblpPr`) din template-ul Adeverinței se randează diferit în LibreOffice față de Word; contează Word/PDF-ul real.
-7. Celule goale: un placeholder gol într-un paragraf separat lasă un rând gol (ex. spor/temei neselectat la Adeverință). Acceptat.
-8. Header/footer: `FillTemplate` procesează și `HeaderParts`/`FooterParts` (necesar la PV Cercetare).
-9. Fără diacritice în numele placeholder-elor; cheile sunt case-sensitive.
-
----
-
-## 8. Registratura
-
-`RegistraturaService` (singleton) calculează codul `YYddd/NR` (an + zi din an + număr) cu `XSupport.GetSQLDataSet()` (citire) și `XSupport.ExecuteSQL()` (scriere). Tabele: `CCCVREGISTRATURA` (registru), plus inserări specifice în `InregistreazaTabelaSpecifica`, rutate după categorie:
-- categorie cu „aditional” → `CCCACTEADITIONALE`
-- categorie cu „suspendare”/„incetare”/„interne” (match `lower.Contains(...)`) → `InsertDecizie` → `CCCDCZCONTRACT` (CCCTIPDCZ dedus din titlu; chei recunoscute ex. `DataIncetare` → `CCCDATAVIGOARE`)
-- PV-uri → `CCCPVEMISE`
-
-**`registratura_tip_doc_pk` NU e per categorie.** Valori confirmate de utilizator: Act adițional și Confidențialitate = 2; **Acord Semnătură Electronică = 36**; Decizii (inclusiv Încetare CIM de la angajator și toate din Cercetare Disciplinară) = 11; Notificare Încetare CIM = 19; Adeverință de Vechime = 3; **Procese Verbale = 22**; cele 4 cereri din Documente Interne (Demisie fără preaviz, Suspendare CIM CC, Înștiințare Sarcină, CO/Zile Libere) = 6. Întreabă utilizatorul înainte de a presupune pk pentru un document nou.
-
-`RegistraturaService.CodExista(cod)` verifică dacă un cod e deja în `CCCVREGISTRATURA` (folosit în `OnGenerate`, vezi §3.4; erorile SQL nu sunt înghițite).
-
-Notă: pentru „Documente Interne” rutarea prin `InsertDecizie` inserează un rând în `CCCDCZCONTRACT` și pentru cereri/adeverință. Utilizatorul a decis că e OK (tabela e doar pentru a vedea ce documente s-au generat per angajat) — nu schimba.
+- Combo `Da`/`Nu` → comutator; secțiunile cu `depends_on` = acel combo și `depends_value` = „Da” apar **în interiorul** comutatorului și nu în navigare. Combo cu 2 opțiuni → comutator între variante; `"style": "segmented"` → butoane alăturate; altfel listă.
+- `depends_on` pe câmp / secțiune: inactivul se **ascunde** (rândurile complet inactive dispar); câmpurile `required` ascunse nu se validează.
+- Titluri „X (Y)” → titlu X + indiciu Y în dreapta. `NrCim`/`DataCim`/`NumeDepartament` nu se afișează (sunt în cardul angajatului).
+- `dynamic_list`: `edit_mode: "dialog"` → carduri + fereastră de editare; altfel rânduri editabile (o coloană → rând compact). Ștergerile cer confirmare (`confirmDel`, Da/Nu, „Nu” implicit).
+- **Date:** elementul propriu `<ro-date type="date|datetime">` — text `zz.ll.aaaa[ hh:mm]`, separatorii se pun singuri la tastare (`roDateMask`, doar la inserare), validare reală (`roDateParse`), text invalid → revine la ultima valoare la ieșire, calendar nativ ascuns (`showPicker`). `.value` e ISO; focusul e pe input-ul interior → `el.contains(document.activeElement)`. `"default": ""` = pornește gol. `time_depends_on`/`time_depends_value` pe `datetime` = ora doar când condiția e adevărată.
+- **Persoane:** `person_picker` deschide selectorul web (`PersonPicker.open`), apoi `pickPerson {prsnId, maps}` → C# calculează valorile. Butonul ales arată numele + „↻ Schimbă”.
+- `unlockable: true` pe secțiune → buton „🔒 Deblochează” pentru câmpurile `readonly` (Acord Semnătură Electronică).
+- **Mențiuni:** secțiunea „MENȚIUNI” (comutator, ascunsă implicit) → `{{MentiuniDocument}}`. ⚠️ Niciun DOCX actual nu conține placeholder-ul.
+- **Previzualizare automată:** la ~1,2 s după ultima modificare și la deschidere (`schedulePreview`/`autoPreview`); butonul „Previzualizează” rămâne. C#: hooks `on_generate` pe firul ferestrei, DOCX + conversie în fundal (`ThreadPool` + firul Word); o cerere venită în timpul generării se păstrează (doar ultima); pagina PDF curentă se păstrează. Eroarea automată = doar starea „eroare”; cea cerută cu butonul = fereastră de eroare.
+- **Linii punctate în previzualizare:** câmpurile simple goale după hooks (`number` 0 = gol) → `BlankLineMarker` albastru (opțional) sau roșiatic `C0504D` (`RequiredBlankMarker` = marker + U+200B, obligatoriu ACUM — pagina trimite `required`). Doar previzualizarea (`emptyMarkers` → `FillTemplate` pas 3b); PDF-ul final nu e afectat.
+- **Clauze (Act Adițional, `clauze_editor`):** puncte = clauză din setul activ (sau „Text liber”), câmpurile ei, textul rezultat (`{0}`, `{1}`…), „✎ Editează textul” manual / „↺ Revino”. `required` = cel puțin un punct completat.
+- **Editorul de clauze** (fereastra `#ovCl`, butonul „⚙ Editor clauze”): un ecran — setul de clauze (= `TipContract`; „★ Folosește în formular” = `tipSelectatId`, „⧉ Copie a setului”, „＋ Set nou gol”, șterge) + clauzele ca acordeon (▲▼, ⧉, ✕; titlu, „Ce se modifică” = `TextClauza`, „Textul nou” = `TextDinamic` scris cu **[Nume câmp]**, „＋ Câmp de completat”, câmpurile deduse din text cu tip ghicit din nume, „Afișează în formular” = `Activ`, exemplu live). Conversie `clFromStore` / `clToStore` ({n} ↔ [nume]); fișierul `clauze_act_aditional.json` (lângă șabloane, `ClauzeService`) are același format ca înainte.
 
 ---
 
-## 9. Teme / categorii
+## 5. Schema JSON — rezumat (detalii în GHID)
 
-`DocumentRegistry.CategoryOrder` (hardcodat): `Sabloane Acte Aditionale`, `Sabloane Decizii Suspendare`, `Sabloane Decizii Incetare`, `Sabloane Cercetare Disciplinara`, `Sabloane Procese Verbale`, `Sabloane Documente Interne` (corectat 2026-11-11; înainte era `Documente Interne` și nu se potrivea cu folderul). Numele din listă trebuie să fie identic cu numele folderului. Pe disc mai există `Sabloane Semnaturi Electronice` (JSON-uri fără `title`, ignorate — vezi §3.5). Categoriile necunoscute (999) rămân în ordinea în care le întoarce `Directory.GetDirectories`.
-`PriorityScrollPanel` (body-ul formularului) derulează la rotița mouse-ului doar când fereastra de sub cursor e panelul sau un copil al lui (`WindowFromPoint`) — un dialog modal deschis peste (ex. `PersonPickerDialog`) își primește singur rotița.
-Word: o singură instanță invizibilă refolosită (`WordHelper`); se închide (`ShutdownWordApp`, doar dacă nu are documente deschise) la ieșirea din bucla thread-ului STA din `PluginEntry` și la închiderea `SelectorDialog` în modul Dll Form. `DocumentTheme.ForCategory` mapează după substring (acte/aditional → albastru `RGB(63,129,198)`, suspendare → teal, incetare → roz, cercetare/disciplinar → violet `RGB(120,60,170)`, verbale/procese → chihlimbar); categoriile necunoscute iau tema implicită (Acte).
-UI: sidebar/preview 40/60 (`FormBase.BuildShellSplit`), body scrollabil, footer izolat: Anulare (roșu deschis), Previzualizează/Actualizează (galben `RGB(255,243,176)`), Generează PDF (accent). Antet formular: Angajat/CNP/Funcție/Nr.CIM/Data CIM/Departament în câmpuri readonly bordate. `NoScrollComboBox` peste tot. Secțiuni cu bară colorată de 4px.
-Butonul „Dosar Personal”: desenat custom (`DrawDosarButton`), icon din `Properties.Resources.dosar_personal` (resursă strong-typed, NU `LoadIcon`/manifest), fundal teal-oliv `(58,74,70)`, bordură aurie `(191,155,89)`, efect de apăsare (fundal mai închis + conținut mutat 1px).
+Rădăcina: `title`, `template_file`, `registratura_tip_doc_pk` (> 0 ⇒ registratură; `"registratura": true` nu mai e necesar), `registratura_date_field`, `order`, `sections[]`, `hooks[]`. Secțiune: `title`, `fields`, `depends_on`/`depends_value`, `unlockable`. Câmp: `key`, `label`, `type`, `label_width_percent` (fără = rând întreg), `required`, `placeholder`, `default` (tokenuri `{today}`, `{year}`, datele angajatului), `depends_on`/`depends_value`, `options`, `style`, `maps`, `time_depends_on`/`time_depends_value`. Listă: `item_fields`, `edit_mode`, `dialog_title`, `summary_fields`, `initial_rows` (implicit 1), `initial_items`, `hide_header`, `add_button_label`, `required`. Element: `key`, `label`, `type`, `width_percent` (implicit 50), `placeholder`, `default`, `options`, `on_select`, `maps`, `max`, `decimals`, `format`, `check_label`, `group`.
 
----
+Curățenie 2026-11-12 (Node, fără schimbare de comportament): scoase `ui`, `registratura`, `height`, `auto_height`, `max_height`, `label_width_percent: 100`, `initial_rows: 1`; JSON-urile re-formatate cu indentare 2. `DocumentDefinition` (C#) conține doar ce folosește C# (titlu, șablon, ordine, registratură, secțiuni → câmpuri `key/label/type/maps/item_fields`, elemente `key/type/maps/decimals/format`, hooks); pagina citește JSON-ul brut.
 
-## 10. Catalog documente existente
+Placeholder-e automate: angajat (`NumeSalariat`, `CNP`, `Functie`, `NumeDepartament`, `NrCim` din `PRSEXTRA.CCCVARCHAR05`, `DataCim`, `SerieCI`/`NrCI` din `PRSN.IDENTITYNUM`, `Domiciliu`, `NumarTelefonSalariat`, `EmailSalariat`), companie (`NumeAngajator`, `CIFAngajator`, `ReprezentantLegal`, `FunctieReprezentant`, `AdresaCompanie`, `ZipCompanie`, `NrRegComertului`, `IbanCompanie`, `NrTelefonCompanie`, `EmailCompanie`, `WebsiteCompanie`), `CodInregistrare`, `MentiuniDocument`, `ArticolCompartiment`/`ArticolContestatie` (hook). `DataInreg` NU e automat. Precompletare la deschidere (`BuildInitialValues`) pentru cheile `CISeria`/`SerieCI`, `CINr`/`NrCI`, `Domiciliu`, `NumeSalariat`, `CNP`, `Functie`, `NumeDepartament`, `NrCim`, telefon/email, datele companiei și `AutoritateEmitenta` / `DataEliberareCI` (tabela `EMPLOYEE`: `ISSAUTHORITY`, `DATEISS`).
 
-**Sabloane Acte Aditionale** — `registratura_date_field` = `DataEmitereAct`, pk 2 (Acord Semnătură Electronică: pk 36)
-1. Act Adițional (de bază, cu `clauze_editor`/`ClauzeEditorDialog`)
-2. Act Adițional — Confidențialitate și Neconcurență (`DataEmitereAct`, `DataModificareClauze`, `CuantumConfidentialitate`, `CuantumNeconcurenta`; text legal static)
-3. Act Adițional — Acord Semnătură Electronică (formular doar de confirmare, secțiuni readonly auto-precompletate, `NumarTelefonSalariat`/`EmailSalariat` din PRSN)
-
-**Sabloane Decizii Suspendare / Incetare / Cercetare Disciplinara / Procese Verbale** — pk 11 la decizii, pk 22 la PV-uri; document-uri: suspendări (abs. nemotivate, creștere copil, acord părți etc.), încetări (demisie, expirare termen, perioadă probă, încetare suspendare), Referat/Avertisment/Decizie Constituire Comisie/Convocare/PV Cercetare/Decizie Concediere Disciplinară, PV Autovehicul/Echipamente/Electronice. Convenții: `registratura_date_field` = `DataDecizie`/`DataCercetare` etc. Avertismentul are câmpul `LocMunca` (secțiunea „LOC DE MUNCĂ”, adăugată 2026-11-11).
-
-**Sabloane Documente Interne** (folderul real; order)
-1. Cerere Demisie fără Preaviz (pk 6; `DataIncetare` standard)
-2. Cerere Suspendare CIM — Creșterea Copilului (pk 6; chei normalizate: `Domiciliu`, `CNP`, `DataStartSuspendare`, `DataEndSuspendare`)
-3. Cerere Înștiințare Sarcină (pk 6; `ListaDocumente` = multiline, text liber)
-4. Cerere Concediu / Zile Libere „CO/Vatra” (pk 6): 3 variante (CO legal / fără plată / învoire) dintr-un combo, câmpuri cu `depends_on`, bifă `▣`/`□` + linii punctate albastre pe variantele neselectate, `CalcZileLucratoare`, perioade cu `datetime` + `FormatPerioada`, selector Zile/Ore, înlocuitor principal + secundar opțional
-5. Notificare Încetare CIM (pk 19, `registratura_date_field` = `DataNotificare`; secțiune „Cine a luat decizia”: `person_picker` + nume + funcție readonly)
-6. Decizie Încetare CIM — de la Angajator (pk 11, `InjectArticoleFinal`, `PERSOANA CARE A FORMULAT NOTIFICAREA` cu person_picker). Mutată din `Sabloane Decizii Incetare` în `Sabloane Documente Interne` pe 2026-11-11 (rutarea în registratură rămâne `InsertDecizie`; tema devine cea implicită).
-7. **Adeverință de Vechime** (pk 3, `registratura_date_field` = `DataInreg`) — vezi §11
-
-Convenția comună pentru „întocmit de HR”: câmp `NumeIntocmitorHr` (text, default „Marin Iulia Alina”) și placeholder `{{NumeIntocmitorHr}}`.
+Hooks: `SetDefault`, `SqlOnOpen`, `SqlOnGenerate`, `CalcDataSfarsit`, `CalcDataSfarsitDinCNP`, `CalcPerioadaSuspendare`, `CalcZileLucratoare`, `FormatPerioada`, `ConcatList`, `SetIfEquals`, `BlankIfNotEquals`, `InjectArticoleFinal` (rulează și în `FillTemplate`). La `on_generate` contează ordinea.
+Convenții în document: linie punctată albastră = valoarea `_ _ _ … _` (`BlankLineMarker`, variante neselectate); `~~text~~` = text tăiat (varianta nealeasă); bife `▣`/`□` ca text (nu `■`).
 
 ---
 
-## 11. Adeverință de Vechime (cea mai recentă implementare)
+## 6. Reguli pentru DOCX (capcane reale)
 
-Fișiere: `adeverinta_vechime.json`, `Adeverinta_Vechime.docx`.
-
-Formular:
-- **DATE ADEVERINȚĂ:** `DataInreg` (date, required), `NumeIntocmitorHr`, `NumeDirectorEconomic` (default „Dunea Dorica” — luat din modelul vechi, de confirmat).
-- **CARTE DE IDENTITATE:** `SerieCI`, `NrCI` (se precompletează din `PRSN.IDENTITYNUM`, editabile), `AutoritateEmitenta` (default „SPCLEP Botosani”), `DataEliberareCI`. În DOCX: `{{SerieCI}} {{NrCI}}`.
-- **CONTRACT DE MUNCĂ:** `TipNorma` (combo `intreaga`/`partiala`), `TipDurataContract` (combo `nedeterminata`/`determinata` — nu fusese cerut explicit, ales de agent).
-- **MUTAȚII INTERVENITE:** `dynamic_list` `Mutatii` cu `edit_mode: "dialog"` (din 2026-11-11; `dialog_title` „Mutație intervenită”, buton „Adaugă mutație”, `required`, auto_height, hide_header, `summary_fields` = `TipMutatie`, `DataMutatie`, `FunctieCurenta`).
-  - **Element implicit** (`initial_items`): „Incheiere Contract”, data mutației = `{DataCim}`, funcția = `{Functie}`, act = „Contract”, nr. = `{NrCim}`, data actului = `{DataCim}`. Operatorul doar editează sporul / temeiul legal dacă e cazul.
-  - **Reguli** (`on_select` pe `TipMutatie`, `default` = „Modificare Contract” pentru mutațiile noi): Incheiere → act „Contract” + nr./date din CIM; Modificare → „Act aditional”; Suspendare / Incetare → „Decizie”; la toate, funcția = `{Functie}` dacă e goală. Operatorul poate modifica orice.
-  Câmpuri în dialog, pe grupuri:
-  - „Mutația”: `TipMutatie` („Tip mutație”, combo: Incheiere / Modificare / Suspendare / Incetare Contract) 50% | `DataMutatie` (date, `maps` → `AnulMutatie`/`LunaMutatie`/`ZiMutatie`) 50%; `FunctieCurenta` 100%
-  - „Salariu”: `SalariulDeBaza` (number, max 99999, 2 zecimale, format `#,##0.##`) 35% | `DetaliuSporOptional` (check_text, „Are spor”) 65%
-  - „Actul care atestă mutația”: `TipDoc` („Tip act”, combo: Contract, Act aditional, Decizie, Notificare, Cerere, Referat) 40% | `NrInregistrareDoc` („Nr. înregistrare act”) 30% | `DataInregDoc` („Data actului”) 30%; `DetaliiTemeiLegalOptional` (check_text, „Are temei legal”) 100%
-  - Versiunea nouă a JSON-ului e în proiect: `Sabloane_lucru\Sabloane Documente Interne\adeverinta_vechime.json` (pornită din arhiva din 06.11); utilizatorul o copiază în folderul real.
-- **PARAGRAFE FINALE:** 4 combo-uri Da/Nu (`ParagrafIncetareContractOptional`, `ParagrafPerioadaAbsenteNemotivateOptional`, `ParagrafPerioadaConcediuFaraPlataOptional`, `ParagrafPerioadaIncapacitateTemporaraOptional`). Fiecare secțiune de conținut (Încetare contract: `DataIncetareContract` + `PrevederiLegale` — default editabil „Art. 81 alin. 7 din Legea nr. 53/2003”; trei liste de perioade `date_range` — absențe nemotivate, concediu fără plată, incapacitate temporară) are `depends_on` pe combo-ul ei, deci apare în formular doar la „Da”.
-
-Document:
-- Cele 4 paragrafe au textul fix cu placeholder-e interioare (`{{DataIncetareContract}}`, `{{PrevederiLegale}}`, `{{PerioadaAbsenteNemotivateOptional}}`, `{{PerioadaConediuFaraPlataOptional}}` [sic, „Conediu” — numele cerut de utilizator], `{{PerioadaIncapacitateTemporaraOptional}}`). Apar ÎNTOTDEAUNA; la „Nu” valorile sunt golite cu `BlankIfNotEquals` → linii punctate albastre. Perioadele multiple din aceeași listă se unesc cu `ConcatList` și separatorul `" si in perioada "`.
-- Tabelul de mutații folosește grupul vMerge de 3 rânduri (An/Lună/Zi). `{{TipMutatie}}` și `{{FunctieCurenta}}` au „All caps” aplicat ca formatare.
-- Salariul se afișează `{{SalariulDeBaza}} Lei;` și, pe paragraf separat, `{{DetaliuSporOptional}}`; actul: `{{TipDoc}}` pe un paragraf, `{{NrInregistrareDoc}} / {{DataInregDoc}}` pe altul; temeiul legal pe al treilea.
+1. Placeholder rupt în mai multe run-uri = OK; NU în run-uri imbricate (`w:hyperlink`, `w:ins`, `w:sdt`, `w:smartTag`), acolade rupte sau spații interioare.
+2. `MergeAndReplace` reconstruiește paragraful: într-un paragraf cu `{{...}}` se pierd `<w:br/>`, `<w:tab/>`, desenele. Soluții: paragrafe separate, `w:ind firstLine`, desene în paragrafe fără placeholder. Formatarea run-ului se păstrează pe valoare.
+3. `<w:numPr>` înaintea unui placeholder ascunde vizual primul run în Word.
+4. Majuscule: „All caps” (`<w:caps/>`), nu Change Case.
+5. Liste: rândul / paragraful cu `{{cheie}}` al unui `item_field` (sau cheie mapată) se clonează; grupurile `vMerge` se clonează împreună; listă goală → rândul dispare (păstrat golit dacă e singurul din tabel / celulă). `clauze_editor` = cheile fixe `ModificareNr/ModificareReferinta/ModificareText`.
+6. Header / footer procesate. Tabelele „floating” se văd diferit în LibreOffice — contează Word.
+7. Fără diacritice în numele placeholder-elor; case-sensitive.
 
 ---
 
-## 12. Istoric al extensiilor de cod (față de arhiva de cod trimisă în iulie 2026)
+## 7. Registratura
 
-Fișierele modificate în sesiunile recente: `DynamicForm.cs`, `DynamicTemplateEngine.cs`, `DocumentDefinition.cs`, `HookRegistry.cs`, `WordHelper.cs`, `RegistraturaService.cs`, `ErpDataProvider.cs`, `DocumentRegistry.cs`, `SelectorDialog.cs`. Dacă repo-ul din VS Code nu conține aceste modificări, aplică-le din versiunile livrate (cele mai recente) — nu rescrie de la zero.
-
-Extensii (toate aditive, opt-in prin JSON):
-- `depends_on`/`depends_value` pe câmpuri și pe secțiuni; `ReflowSections`/`UpdateSectionVisibility`/`UpdateListHeight` în `DynamicForm`.
-- Tip `datetime`; combo declanșează `on_change`.
-- Hooks `SetIfEquals`, `BlankIfNotEquals`, `CalcZileLucratoare`, `FormatPerioada`; `SetDefault` cu `{year}`/`{today}`; `person_picker` maps cu sufix `:upper`.
-- `WordHelper`: colorare albastră pentru `BlankLineMarker`.
-- Căutare folder angajat după `PrsnId` (`ResolvePersonFolder`); buton „Dosar Personal”.
-- `PrePopulateReadonlyCommonFields`; `TelefonSalariat`/`EmailSalariat` în lanțul `ErpDataProvider` → `CommonDocumentValues` → `DynamicTemplateEngine` → `DynamicForm`.
-- Liste dinamice: tipuri `combo`, `date` (+`maps`), `date_range`, `check_text`, `number` (`max`/`decimals`/`format`), `group`; opțiuni `collapsible`, `summary_fields`, `auto_height`, `max_height`, `hide_header`, `add_button_label`; `{{NrCrt}}`; clonare grupuri vMerge în `ExpandParagraphOrRow`; `HasVMergeRestart`/`HasVMergeContinueOnly`.
-
-Corecturi 2026-11-11 (compilate local, netestate în Softone):
-- `DynamicForm`: valoarea `person_picker` nu mai e ștearsă la `on_change`; `maps` pe cheia pickerului (cu `:upper`) nu mai e suprascris; `required` pe picker validează corect.
-- `DynamicForm.OnGenerate` + `RegistraturaService.CodExista`: PDF înainte de registratură, cod proaspăt + verificare cod liber, ștergere PDF dacă înregistrarea eșuează (§3.4).
-- `DynamicTemplateEngine.ExpandDynamicLists` / `ExpandParagraphOrRow`: liste goale → paragraf/rând eliminat (§7.5).
-- `PriorityScrollPanel`: rotița ajunge la dialogurile modale (§9).
-- `WordHelper.ShutdownWordApp` apelat la final (`PluginEntry`, `SelectorDialog` standalone); timerul de puls din `SelectorDialog` oprit la `FormClosed`.
-
-- Ștergerea oricărui element dintr-o listă (rând `dynamic_list`, card `edit_mode: "dialog"`, clauză Act Adițional) cere confirmare: `ConfirmareStergereDialog.Intreaba(owner, mesaj, theme)` — butoane „Da” / „Nu” în română, „Nu” implicit (Enter/Esc nu șterg). Folosește-l pentru orice ștergere nouă.
-
-Revertate / respinse de utilizator (nu le reintroduce):
-- Hook `PrefixIfNotEmpty` („și/sau”) — respins.
-- Format de nume PDF MAJUSCULE_UNDERSCORE și câmp `filename_title` — respinse, tot codul revertat.
-- Bifă `■` plină — înlocuită cu `□`/`▣`.
+`RegistraturaService`: cod `YYddd/NR`, `CCCVREGISTRATURA` + `CCCVDOCAUDIT`, plus `InregistreazaTabelaSpecifica` după categorie: „aditional” → `CCCACTEADITIONALE`; „suspendare”/„incetare”/„interne” → `InsertDecizie` → `CCCDCZCONTRACT` (CCCTIPDCZ = titlul fără diacritice; e OK și pentru cereri — decizia utilizatorului); PV-uri → `CCCPVEMISE` (CCCPVTYPE 2 dacă titlul conține „autovehicul”).
+`registratura_tip_doc_pk` (confirmate): Act adițional + Confidențialitate = 2; Acord Semnătură Electronică = 36; decizii (inclusiv Încetare CIM de la angajator și toată Cercetarea Disciplinară) = 11; Notificare Încetare CIM = 19; Adeverință de Vechime = 3; Procese Verbale = 22; cele 4 cereri din Documente Interne = 6. Întreabă pentru un document nou.
+`CodExista(cod)` — verificarea codului liber după generarea PDF-ului.
 
 ---
 
-## 13. Probleme deschise / de verificat
+## 8. Categorii / teme
 
-1. Corecturile din 2026-11-11 (§12) compilează, dar n-au fost testate în Softone — rămâi atent la regresii.
-2. Bug latent cunoscut: `SetControlValue` nu tratează `ComboBox` (un `SetDefault`/`SqlOnOpen` pe un combo nu se vede în UI). Niciun JSON actual nu e afectat.
-3. `NumeDirectorEconomic` = „Dunea Dorica” și valorile `TipNorma`/`TipDurataContract` sunt alegeri ale agentului — de confirmat cu utilizatorul.
-4. Câmpul `number` de nivel formular are max 999 (în liste: configurabil).
-5. `FunctieReprezentant` e hardcodat în `PluginConfig` (se schimbă prin recompilare).
-6. Secțiunile din liste nu suportă `depends_on` pe câmpurile din rând (doar pe secțiune întreagă sau pe câmpuri de nivel formular).
+`DocumentRegistry.CategoryOrder` (identic cu numele folderelor): `Sabloane Acte Aditionale`, `Sabloane Decizii Suspendare`, `Sabloane Decizii Incetare`, `Sabloane Cercetare Disciplinara`, `Sabloane Procese Verbale`, `Sabloane Documente Interne`; necunoscutele la final. `DocumentTheme.ForCategory` (substring): acte/aditional albastru `(63,129,198)`, suspendare teal, incetare roz, cercetare/disciplinar violet `(120,60,170)`, verbale/procese chihlimbar, interne verde `(59,138,74)`; implicit = Acte.
 
 ---
 
-## 14. Cum lucrezi cu utilizatorul (flux recomandat)
+## 9. Catalog documente (29) — copii în `Sabloane Pentru redefinirea proiectului\`
 
-Document nou, în ordine:
-1. Primești DOCX-ul (și uneori un model completat). Extrage placeholder-ele; verifică run-uri rupte, `numPr`, `br`/`tab`/desene în paragrafe cu placeholder, acolade rupte, diacritice în nume.
-2. Mapează placeholder-ele pe: placeholder-e automate (§5), câmpuri din formular, chei de listă/`maps`, ținte de hooks. Normalizează numele nestandard (`NumeIntocmitor` → `NumeIntocmitorHr`, `DomiciliuSalariat` → `Domiciliu`, `CNPSalariat` → `CNP`).
-3. Întreabă DOAR ce nu se poate deduce (pk registratură, valori implicite, categorie/folder, `order`). Pentru restul alege o valoare rezonabilă și spune ce ai ales.
-4. Scrie JSON-ul (schema din §4), apoi verifică încrucișat: fiecare `{{Cheie}}` din DOCX are sursă; fiecare `item_key` de `ConcatList` e cheie din `item_fields`; suma `label_width_percent`/`width_percent` pe rând = 100; `template_file` coincide cu numele DOCX-ului.
-5. Patch-uri de cod doar dacă mecanismul lipsește; păstrează opt-in, nu schimba comportamentul documentelor existente, păstrează BOM + CRLF.
-6. Livrează fișierele complete (nu diff-uri), cu o notă scurtă: ce s-a schimbat, ce e de confirmat, ce n-a fost testat.
+**Acte Adiționale** (`DataEmitereAct`): Act Aditional (clauze), Act Aditional — Confidentialitate si Neconcurenta, Acord Semnătură Electronică (secțiuni `unlockable`, date precompletate).
+**Decizii Suspendare** (6) / **Decizii Încetare** (4) — pk 11, `DataDecizie`, `InjectArticoleFinal`.
+**Cercetare Disciplinară** (6, pk 11): Referat, Avertisment, Decizie Constituire Comisie, Convocare, PV Cercetare, Decizie Concediere. Reorganizate 2026-11-12 (secțiuni în ordinea din document, câmpuri din document obligatorii). `CodInregistrareITM` implicit „4711/CCMMRM/04.08.2026”, `IntervalAniCCM` „2026-2028” (Convocare + Decizie Constituire). Nr./data documentului anterior se completează MANUAL (datele pornesc goale, obligatorii) — precompletarea din registratură a fost respinsă ca nefezabilă momentan. Concediere: `PerioadaCercetare` = 2 date + `FormatPerioada`. Convocare: `CodCor` din `SqlOnOpen`.
+**Procese Verbale** (pk 22, `DataPV`): Echipamente de Lucru, Echipamente Electronice (`TipPredare` segmented, cantitate/preț `number`, preț `#,##0.00`), Predare-Primire Autovehicul (ordinea din document, dotări Da/Nu, RCA/rovinietă pornesc goale).
+**Documente Interne:** Cerere Demisie fara Preaviz (6), Cerere Suspendare CIM — Cresterea Copilului (6), Cerere Instiintare Sarcina (6; „Vârsta sarcinii” + comutator `UnitateSarcina` săptămâni/luni → `{{TextSaptamani}} / {{TextLuni}}` cu varianta nealeasă tăiată — DOCX modificat în copia din proiect), Cerere Concediu / Zile Libere „CO/Vatra” (6; ordine Interval → Tip cerere (segmented) → secțiunea variantei → Înlocuitori; bife `▣`/`□`, linii albastre pe variantele neselectate, `CalcZileLucratoare`, `FormatPerioada`, Zile/Ore cu `time_depends_on`), Notificare Incetare CIM (19, `DataNotificare`), Decizie Incetare CIM — de la Angajator (11), **Adeverinta de Vechime** (3, `DataInreg`).
 
-Reguli de stil: răspunsuri scurte, fără explicații lungi, liste doar când ajută. Numele de fișiere/chei în backticks. Nu repeta ce a făcut utilizatorul.
+Convenția „întocmit de HR”: câmp `NumeIntocmitorHr` (default „Marin Iulia Alina”).
+
+### Adeverința de Vechime
+- DATE ADEVERINȚĂ: `DataInreg`, `NumeIntocmitorHr`, `NumeDirectorEconomic` („Dunea Dorica Liliana”). CARTE DE IDENTITATE: `SerieCI`, `NrCI`, `AutoritateEmitenta` (default „SPCLEP Botosani”, ERP dacă există), `DataEliberareCI`. CONTRACT: `TipNorma` (intreaga/partiala), `TipDurataContract` (nedeterminata/determinata).
+- MUTAȚII: listă `Mutatii`, `edit_mode: "dialog"`, `required`; element implicit „Incheiere Contract” din datele CIM (`initial_items`); `on_select` pe `TipMutatie` (Incheiere → Contract + nr./date CIM; Modificare → Act aditional; Suspendare/Incetare → Decizie; funcția = `{Functie}` dacă e goală). Câmpuri pe grupuri: Mutația (`TipMutatie`, `DataMutatie` cu `maps` An/Lună/Zi, `FunctieCurenta`), Salariu (`SalariulDeBaza` number `#,##0.##`, `DetaliuSporOptional` check_text), Actul (`TipDoc`, `NrInregistrareDoc`, `DataInregDoc`, `DetaliiTemeiLegalOptional`).
+- PARAGRAFE FINALE: 4 comutatoare Da/Nu cu secțiunile lor în interior (încetare: `DataIncetareContract` + `PrevederiLegale` default „Art. 81 alin. 7 din Legea nr. 53/2003”; 3 liste de perioade `date_range`). În document paragrafele apar mereu; la „Nu” valorile devin linii albastre (`BlankIfNotEquals`); perioadele se unesc cu `ConcatList` (`" si in perioada "`). `{{PerioadaConediuFaraPlataOptional}}` [sic] e numele cerut de utilizator.
+- DOCX: tabelul de mutații folosește grupul vMerge An/Lună/Zi; `{{TipMutatie}}`/`{{FunctieCurenta}}` au „All caps”.
 
 ---
 
-## 15. Placeholder-e și chei — verificare rapidă la un document nou
+## 10. Istoric important
 
-- Cheile din JSON = placeholder-e în DOCX (case-sensitive).
-- Valorile unei `dynamic_list` nu se expandează decât dacă markerul `{{cheie}}` al unui `item_field` (sau cheie mapată) apare în template.
-- `ConcatList.item_key` trebuie să fie cheia din `item_fields` (nu cheia listei, nu cea a pickerului).
-- Câmp `multiline` scris greșit ca `text` apare turtit (26px).
-- Formularul nu apare în selector: JSON invalid, `template_file` inexistent, folder gol sau nu direct sub `TemplateDocsPath`.
-- Secțiune clipuită: recalculează `height` (câmp simplu ≈ 58px, multiline ≈ 172px, padding 16px) — la liste cu `auto_height` nu e nevoie.
+- **2026-11-12 — „purge”:** tot UI-ul trecut pe web; șterse: `DynamicForm` (+ `DynamicListRow` etc.), `ListItemDialog`, `PunctModificareControl`, `ClauzeEditorDialog`, `ConfirmareDialog`, `ConfirmareStergereDialog`, `SuccessDialog`, `PersonPickerDialog`, `DocumentFormFactory`, resursele PNG / `Resources.resx` / `Settings`, `PROJECT_CONTEXT_old.md`, `handoff.md`. Noi: `WebHostForm`, `PersonList`, `AppServices`, `AppLauncher`, `selector.*`, `picker.js`, `app.css`. Selectorul rămâne deschis sub formular (înainte se închidea și se redeschidea). PRSNIN fără angajat curent → selectorul se deschide fără preselecție (înainte nu se deschidea nimic).
+- Corecturi anterioare încă valabile: PDF înainte de registratură + cod liber verificat; liste goale → rândul șablonului eliminat; `ResolvePersonFolder` după PrsnId; Word pe fir dedicat.
+
+Respinse de utilizator (nu le reintroduce): hook `PrefixIfNotEmpty`; nume PDF MAJUSCULE_UNDERSCORE / `filename_title`; bifa plină `■`; precompletarea nr./datei din registratură la Cercetare Disciplinară (momentan).
+
+---
+
+## 11. Probleme deschise / de verificat
+
+1. Purge-ul din 2026-11-12 a fost testat de utilizator în Softone (2026-11-12) și funcționează. Dacă apare ceva, verifică întâi zonele noi: selectorul web, selectorul de angajați, confirmarea / succesul web, deschiderea ca Dll Form.
+2. Semnăturile electronice: tiparele de nume au fost actualizate de utilizator după titlurile fără diacritice (2026-11-12). Pe viitor utilizatorul vrea să dea acces la proiectul semnăturilor, ca să fie mai puțin hardcodat (tipar de nume + coordonate fixe) — momentan rămâne așa.
+3. Câmpul `number` de nivel formular are max 999 (în liste: `max`).
+4. `FunctieReprezentant` e hardcodat în `PluginConfig`.
+5. Câmpurile din elementele unei liste nu suportă `depends_on`.
+6. `{{MentiuniDocument}}` nu există în niciun DOCX.
+
+---
+
+## 12. Cum lucrezi cu utilizatorul
+
+Document nou: (1) extrage placeholder-ele din DOCX și verifică capcanele §6; (2) mapează-le pe placeholder-e automate, câmpuri, liste/`maps`, ținte de hooks (normalizează: `NumeIntocmitor` → `NumeIntocmitorHr`, `DomiciliuSalariat` → `Domiciliu`, `CNPSalariat` → `CNP`); (3) întreabă doar ce nu se deduce (pk registratură, valori implicite, categorie, `order`); (4) scrie JSON-ul și verifică încrucișat (fiecare `{{Cheie}}` are sursă, `ConcatList.item_key` din `item_fields`, `template_file` corect); (5) cod doar dacă lipsește mecanismul — opt-in, fără să schimbi documentele existente; (6) livrează fișierele complete cu o notă scurtă: ce s-a schimbat, ce e de confirmat, ce n-a fost testat.
+
+Stil: răspunsuri scurte, liste doar când ajută, numele de fișiere/chei în backticks.

@@ -18,6 +18,12 @@ namespace ActAditionalPlugin.Services
         internal const string BlankLineMarker = "_ _ _ _ _ _ _ _ _ _ _ _ _ _ _";
         private const string BlankLineColorHex = "0070C0";
 
+        // Doar la previzualizarea din formularul web: camp OBLIGATORIU necompletat.
+        // Acelasi aspect, dar rosiatic; caracterul invizibil (U+200B) il deosebeste
+        // de BlankLineMarker.
+        internal const string RequiredBlankMarker = BlankLineMarker + "​";
+        private const string RequiredBlankColorHex = "C0504D";
+
         internal static string SanitizeFileName(string input)
         {
             if (string.IsNullOrWhiteSpace(input)) return "_";
@@ -135,17 +141,29 @@ namespace ActAditionalPlugin.Services
                 }
 
                 RunProperties phRpr = posToRpr.ContainsKey(phIdx) ? posToRpr[phIdx] : null;
-                if (value == BlankLineMarker)
+                if (value == BlankLineMarker || value == RequiredBlankMarker)
                 {
                     phRpr = phRpr != null ? (RunProperties)phRpr.CloneNode(true) : new RunProperties();
                     phRpr.RemoveAllChildren<Color>();
-                    phRpr.PrependChild(new Color { Val = BlankLineColorHex });
+                    phRpr.PrependChild(new Color
+                    {
+                        Val = value == RequiredBlankMarker ? RequiredBlankColorHex : BlankLineColorHex
+                    });
                 }
                 if (value.Length > 0)
                 {
-                    result.Add(value.IndexOf('\n') >= 0 || value.IndexOf('\r') >= 0
-                        ? MakeRunWithBreaks(value, phRpr)
-                        : MakeRun(value, phRpr));
+                    // "~~text~~" -> text taiat cu o linie (ex. varianta nealeasa:
+                    // "saptamani / ~~luni~~"); markerii nu apar in document
+                    string shown = value;
+                    if (IsStrikeValue(value))
+                    {
+                        shown = value.Substring(2, value.Length - 4);
+                        phRpr = phRpr != null ? (RunProperties)phRpr.CloneNode(true) : new RunProperties();
+                        AddStrike(phRpr);
+                    }
+                    result.Add(shown.IndexOf('\n') >= 0 || shown.IndexOf('\r') >= 0
+                        ? MakeRunWithBreaks(shown, phRpr)
+                        : MakeRun(shown, phRpr));
                     replPos += value.Length;
                 }
                 origPos = phIdx + ph.Length;
@@ -161,12 +179,72 @@ namespace ActAditionalPlugin.Services
             return result.Count > 0 ? result : new List<Run> { MakeRun(replaced, null) };
         }
 
+        // ── Text taiat (strikethrough) ───────────────────────
+        // Valoare "~~text~~" (ex. setata de SetIfEquals) => "text" cu <w:strike/>.
+        internal static bool IsStrikeValue(string v)
+        {
+            return v != null && v.Length > 4 && v.StartsWith("~~") && v.EndsWith("~~");
+        }
+
+        // <w:strike/> pus in ordinea din schema rPr (inainte de color, sz, u, lang ...)
+        private static readonly HashSet<string> AfterStrike = new HashSet<string>
+        {
+            "dstrike", "outline", "shadow", "emboss", "imprint", "noProof", "snapToGrid",
+            "vanish", "webHidden", "color", "spacing", "w", "kern", "position", "sz", "szCs",
+            "highlight", "u", "effect", "bdr", "shd", "fitText", "vertAlign", "rtl", "cs",
+            "em", "lang", "eastAsianLayout", "specVanish", "oMath"
+        };
+
+        private static void AddStrike(RunProperties rpr)
+        {
+            rpr.RemoveAllChildren<Strike>();
+            var before = rpr.ChildElements.FirstOrDefault(c => AfterStrike.Contains(c.LocalName));
+            if (before != null) rpr.InsertBefore(new Strike(), before);
+            else rpr.AppendChild(new Strike());
+        }
+
         // ── Word Interop → PDF (singleton instance) ───────────
+        // Toate apelurile catre Word ruleaza pe un fir STA dedicat (WordThread),
+        // nu pe firul ferestrei care le cere. Astfel formularul web poate face
+        // previzualizarea in fundal fara sa blocheze interfata, iar instanta
+        // Word e folosita mereu de pe acelasi fir (regula COM pentru STA).
         private static object _wordApp;
         private static Type _wordType;
         private static readonly object _wordLock = new object();
+        private static readonly object _threadLock = new object();
+        private static WordThread _thread;
+
+        private static WordThread Worker
+        {
+            get
+            {
+                lock (_threadLock)
+                {
+                    if (_thread == null) _thread = new WordThread();
+                    return _thread;
+                }
+            }
+        }
 
         internal static void ConvertToPdf(string docxPath, string pdfPath)
+        {
+            Worker.Invoke(() => ConvertCore(docxPath, pdfPath));
+        }
+
+        internal static void ShutdownWordApp()
+        {
+            WordThread t;
+            lock (_threadLock)
+            {
+                t = _thread;
+                _thread = null;
+            }
+            if (t == null) return;
+            try { t.Invoke(ShutdownCore); } catch { }
+            t.Stop();
+        }
+
+        private static void ConvertCore(string docxPath, string pdfPath)
         {
             lock (_wordLock)
             {
@@ -186,7 +264,7 @@ namespace ActAditionalPlugin.Services
             }
         }
 
-        internal static void ShutdownWordApp()
+        private static void ShutdownCore()
         {
             lock (_wordLock)
             {
@@ -230,6 +308,63 @@ namespace ActAditionalPlugin.Services
 
             _wordApp = Activator.CreateInstance(_wordType);
             _wordType.InvokeMember("Visible", BindingFlags.SetProperty, null, _wordApp, new object[] { false });
+        }
+
+        // ══════════════════════════════════════════════════════
+        //  Fir STA dedicat pentru Word, cu bucla de mesaje proprie.
+        //  Invoke = executa sincron pe firul Word (apelantul asteapta);
+        //  exceptiile se transmit apelantului.
+        // ══════════════════════════════════════════════════════
+        private sealed class WordThread
+        {
+            private readonly System.Threading.ManualResetEvent _ready =
+                new System.Threading.ManualResetEvent(false);
+            private System.Windows.Forms.Control _ctl;
+
+            public WordThread()
+            {
+                var t = new System.Threading.Thread(Run)
+                {
+                    IsBackground = true,
+                    Name = "GeneratorDocumente.Word"
+                };
+                t.SetApartmentState(System.Threading.ApartmentState.STA);
+                t.Start();
+                _ready.WaitOne();
+            }
+
+            private void Run()
+            {
+                _ctl = new System.Windows.Forms.Control();
+                _ctl.CreateControl();
+                var h = _ctl.Handle;   // forteaza crearea handle-ului pe acest fir
+                _ready.Set();
+                System.Windows.Forms.Application.Run();
+            }
+
+            public void Invoke(Action action)
+            {
+                Exception err = null;
+                _ctl.Invoke(new Action(() =>
+                {
+                    try { action(); }
+                    catch (Exception ex) { err = ex; }
+                }));
+                if (err != null) throw err;
+            }
+
+            public void Stop()
+            {
+                try
+                {
+                    _ctl.BeginInvoke(new Action(() =>
+                    {
+                        _ctl.Dispose();
+                        System.Windows.Forms.Application.ExitThread();
+                    }));
+                }
+                catch { }
+            }
         }
     }
 }
